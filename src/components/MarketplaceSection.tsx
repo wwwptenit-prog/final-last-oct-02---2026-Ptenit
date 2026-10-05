@@ -888,6 +888,9 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
     addMarketplaceOrder,
     payouts,
     requestTeacherPayout,
+    deleteTeacherPayout,
+    updateTeacherPayout,
+    updatePayoutStatus,
     notifications,
     isNotificationCenterOpen,
     isMessengerInboxOpen,
@@ -1011,6 +1014,75 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
       (o.assignedExpertId && o.assignedExpertId === currentUser.id)
     );
   }, [marketplaceOrders, currentUser]);
+
+  const mySellerCoursesList = useMemo(() => {
+    if (!currentUser) return [];
+    return courses.filter(c => (c as any).instructorId === currentUser.id || (currentUser.email && (c as any).instructorEmail && (c as any).instructorEmail.toLowerCase() === currentUser.email.toLowerCase()));
+  }, [courses, currentUser]);
+
+  // Active Pending Cashout Application State
+  const [activePendingPayout, setActivePendingPayout] = useState<{
+    id: string;
+    amount: number;
+    paymentMethod: string;
+    accountNumber: string;
+    requestedAt: string;
+    status: 'Pending' | 'Approved' | 'Paid';
+  } | null>({
+    id: 'pay-106',
+    amount: 683919,
+    paymentMethod: 'bKash',
+    accountNumber: '01700000000',
+    requestedAt: '১৪/৮/২০২৬, ১:১৩:৪২ AM',
+    status: 'Pending'
+  });
+
+  const sellerEarningsSummary = useMemo(() => {
+    const mktEarned = mySellerOrdersList.reduce((acc, o) => {
+      const payout = o.sellerPayout || (o.amount ? Math.round(o.amount * 0.9) : 0) || o.amount || 0;
+      return acc + payout;
+    }, 0);
+
+    const mntEarned = mySellerCoursesList.reduce((acc, c) => {
+      const courseEnrollments = (enrollments || []).filter(e => e.courseId === c.id);
+      const stCount = Math.max(
+        courseEnrollments.length,
+        c.enrolledCount || 0,
+        (c as any).studentsCount || 0,
+        (c as any).totalEnrollments || 0
+      );
+      const crsFee = c.price || 0;
+      const courseAmt = stCount > 0 ? stCount * crsFee : crsFee;
+      return acc + courseAmt;
+    }, 0);
+
+    const totalEarned = mktEarned + mntEarned;
+    const commFee = Math.round(totalEarned * 0.1);
+    const netEarned = Math.max(0, totalEarned - commFee);
+
+    const rawPayouts = currentUser ? payouts.filter(p =>
+      p.teacherId === currentUser.id ||
+      (currentUser.email && p.teacherEmail && p.teacherEmail.toLowerCase() === currentUser.email.toLowerCase())
+    ) : [];
+    const approvedPaidAmount = rawPayouts.filter(p => p.status === "Approved" || p.status === "Paid").reduce((acc, p) => acc + p.amount, 0);
+    const pendingFromContext = rawPayouts.filter(p => p.status === "Pending").reduce((acc, p) => acc + p.amount, 0);
+    const activePendingAmt = (activePendingPayout && activePendingPayout.status === 'Pending' && !rawPayouts.some(p => p.id === activePendingPayout.id))
+      ? activePendingPayout.amount
+      : 0;
+    const pendingPayoutAmount = pendingFromContext + activePendingAmt;
+    const availBal = Math.max(0, netEarned - approvedPaidAmount - pendingPayoutAmount);
+
+    return {
+      mktEarned,
+      mntEarned,
+      totalEarned,
+      commFee,
+      netEarned,
+      approvedPaidAmount,
+      pendingPayoutAmount,
+      availBal
+    };
+  }, [mySellerOrdersList, mySellerCoursesList, enrollments, currentUser, payouts, activePendingPayout]);
 
   const userCreatedDateFormatted = useMemo(() => {
     if (currentUser?.createdAt) {
@@ -2601,6 +2673,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
   const [sellerSubTab, setSellerSubTab] = useState<'gigs' | 'my_gigs' | 'orders' | 'requests' | 'earnings' | 'create_gig' | 'courses' | 'assignments' | 'submissions' | 'completed' | 'students' | 'certificates' | 'live_classes' | 'overview'>('gigs');
   const [payoutSubTab, setPayoutSubTab] = useState<'overview' | 'sources' | 'withdraw' | 'history'>('overview');
   const [payoutStatusFilter, setPayoutStatusFilter] = useState<'All' | 'Pending' | 'Approved' | 'Rejected'>('All');
+  const [earningsCategoryFilter, setEarningsCategoryFilter] = useState<'all' | 'marketplace' | 'courses' | 'withdraw'>('all');
   const [payoutMinAmount, setPayoutMinAmount] = useState<number>(0);
   const [payoutSearchQuery, setPayoutSearchQuery] = useState<string>('');
   const [isCreateAssignmentModalOpen, setIsCreateAssignmentModalOpen] = useState(false);
@@ -2755,29 +2828,20 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
   const [withdrawSuccess, setWithdrawSuccess] = useState(false);
   const [availableBalance, setAvailableBalance] = useState<number>(0);
 
-  // Active Pending Cashout Application State
-  const [activePendingPayout, setActivePendingPayout] = useState<{
-    id: string;
-    amount: number;
-    paymentMethod: string;
-    accountNumber: string;
-    requestedAt: string;
-    status: 'Pending' | 'Approved' | 'Paid';
-  } | null>({
-    id: 'pay-106',
-    amount: 683919,
-    paymentMethod: 'bKash',
-    accountNumber: '01700000000',
-    requestedAt: '১৪/৮/২০২৬, ১:১৩:৪২ AM',
-    status: 'Pending'
-  });
-
   const [isPendingMenuOpen, setIsPendingMenuOpen] = useState(false);
   const [openPayoutMenuId, setOpenPayoutMenuId] = useState<string | null>(null);
   const [isEditPendingModalOpen, setIsEditPendingModalOpen] = useState(false);
+  const [editPendingPayoutId, setEditPendingPayoutId] = useState<string>('pay-106');
   const [editPendingAmount, setEditPendingAmount] = useState<number>(683919);
-  const [editPendingMethod, setEditPendingMethod] = useState<'bKash' | 'Nagad' | 'Bank'>('bKash');
+  const [editPendingMethod, setEditPendingMethod] = useState<'bKash' | 'Nagad' | 'Rocket' | 'Bank'>('bKash');
   const [editPendingAccount, setEditPendingAccount] = useState('01700000000');
+  const [deletePendingTarget, setDeletePendingTarget] = useState<{ id: string; amount: number } | null>(null);
+  const [editPendingError, setEditPendingError] = useState('');
+
+  const handleDeletePendingPayout = (payoutId: string, payoutAmt: number) => {
+    setOpenPayoutMenuId(null);
+    setDeletePendingTarget({ id: payoutId, amount: payoutAmt });
+  };
 
   // Edit Seller Profile Modal State
   const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
@@ -2812,15 +2876,6 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
     }
   }, [currentUser]);
 
-  useEffect(() => {
-    const handleGlobalClick = () => {
-      setOpenPayoutMenuId(null);
-    };
-    if (openPayoutMenuId) {
-      window.addEventListener('click', handleGlobalClick);
-      return () => window.removeEventListener('click', handleGlobalClick);
-    }
-  }, [openPayoutMenuId]);
 
   const handleSaveBuyerProfile = (e: React.FormEvent) => {
     e.preventDefault();
@@ -3864,9 +3919,17 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
       if (openAuthModal) openAuthModal();
       return;
     }
+    if (sellerEarningsSummary.availBal <= 0) {
+      alert('উত্তোলনযোগ্য ব্যালেন্স নেই (৳০)!');
+      return;
+    }
     const numAmt = Number(cashoutAmount);
     if (!numAmt || numAmt <= 0) {
       alert('দয়া করে ক্যাশআউটের জন্য সঠিক টাকার পরিমাণ প্রদান করুন!');
+      return;
+    }
+    if (numAmt > sellerEarningsSummary.availBal) {
+      alert(`আপনার উত্তোলনের পরিমাণ বর্তমান ব্যালেন্সের (৳${sellerEarningsSummary.availBal.toLocaleString('bn-BD')}) চেয়ে বেশি হতে পারবে না!`);
       return;
     }
     const newId = `pay-${Date.now().toString().slice(-6)}`;
@@ -7875,11 +7938,11 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                     }}
                     className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-[14px] font-medium transition text-left cursor-pointer ${
                       specialistMainTab === 'payments'
-                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold'
+                        ? 'bg-rose-500/10 text-[#E11D48] dark:text-rose-400 font-bold'
                         : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-800/80'
                     }`}
                   >
-                    <Wallet className="w-4.5 h-4.5 text-amber-500 shrink-0" />
+                    <Wallet className="w-4.5 h-4.5 text-[#E11D48] shrink-0" />
                     <span>আয় ও ক্যাশআউট</span>
                   </button>
 
@@ -7914,17 +7977,17 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                     }}
                     className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-[14px] font-medium transition text-left cursor-pointer ${
                       specialistMainTab === 'mentor' && mentorActiveSection === 'courses'
-                        ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold'
+                        ? 'bg-rose-500/10 text-[#E11D48] dark:text-rose-400 font-bold'
                         : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-800/80'
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
-                      <GraduationCap className="w-4.5 h-4.5 text-indigo-500 shrink-0" />
+                      <GraduationCap className="w-4.5 h-4.5 text-[#E11D48] shrink-0" />
                       <span>কোর্স</span>
                     </div>
                     <span className={`text-[11px] px-2 py-0.5 rounded-full font-black ${
                       specialistMainTab === 'mentor' && mentorActiveSection === 'courses'
-                        ? 'bg-indigo-600 text-white'
+                        ? 'bg-[#E11D48] text-white'
                         : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                     }`}>
                       {courses.length || 19}টি
@@ -7945,18 +8008,18 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                     }}
                     className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-[14px] font-medium transition text-left cursor-pointer ${
                       specialistMainTab === 'mentor' && mentorActiveSection === 'new'
-                        ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold'
+                        ? 'bg-rose-500/10 text-[#E11D48] dark:text-rose-400 font-bold'
                         : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-800/80'
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
-                      <AlertCircle className="w-4.5 h-4.5 text-purple-500 shrink-0" />
+                      <AlertCircle className="w-4.5 h-4.5 text-[#E11D48] shrink-0" />
                       <span>নতুন</span>
                     </div>
                     <span className={`text-[11px] px-2 py-0.5 rounded-full font-black ${
                       specialistMainTab === 'mentor' && mentorActiveSection === 'new'
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300'
+                        ? 'bg-[#E11D48] text-white'
+                        : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                     }`}>
                       {(submissions || []).filter(s => (s.status as any) === 'submitted' || (s.status as any) === 'new').length}টি
                     </span>
@@ -7976,18 +8039,18 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                     }}
                     className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-[14px] font-medium transition text-left cursor-pointer ${
                       specialistMainTab === 'mentor' && mentorActiveSection === 'review'
-                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold'
+                        ? 'bg-rose-500/10 text-[#E11D48] dark:text-rose-400 font-bold'
                         : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-800/80'
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
-                      <Clock className="w-4.5 h-4.5 text-amber-500 shrink-0" />
+                      <Clock className="w-4.5 h-4.5 text-[#E11D48] shrink-0" />
                       <span>রিভিউ</span>
                     </div>
                     <span className={`text-[11px] px-2 py-0.5 rounded-full font-black ${
                       specialistMainTab === 'mentor' && mentorActiveSection === 'review'
-                        ? 'bg-amber-500 text-white'
-                        : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
+                        ? 'bg-[#E11D48] text-white'
+                        : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                     }`}>
                       {(submissions || []).filter(s => s.status === 'under_review' || s.status === 'review' || s.status === 'returned' || s.status === 'graded').length || 9}টি
                     </span>
@@ -8006,12 +8069,12 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                     }}
                     className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-[14px] font-medium transition text-left cursor-pointer ${
                       specialistMainTab === 'mentor' && mentorActiveSection === 'live_classes'
-                        ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold'
+                        ? 'bg-rose-500/10 text-[#E11D48] dark:text-rose-400 font-bold'
                         : 'text-slate-700 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-800/80'
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
-                      <Video className="w-4.5 h-4.5 text-rose-500 shrink-0" />
+                      <Video className="w-4.5 h-4.5 text-[#E11D48] shrink-0" />
                       <span>লাইভ ক্লাস</span>
                     </div>
                   </button>
@@ -8070,15 +8133,15 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                 ) : (
                   <>
               {/* SPECIALIST DYNAMIC SUB-TABS STRIP */}
-              <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 sm:p-4 rounded-2xl sm:rounded-3xl shadow-xs space-y-3 font-bengali text-slate-900 dark:text-white animate-fadeIn ${specialistMainTab === 'marketplace' || specialistMainTab === 'mentor' ? 'hidden' : ''}`}>
+              <div className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3 sm:p-4 rounded-2xl sm:rounded-3xl shadow-xs space-y-3 font-bengali text-slate-900 dark:text-white animate-fadeIn ${specialistMainTab === 'marketplace' || specialistMainTab === 'mentor' || specialistMainTab === 'payments' ? 'hidden' : ''}`}>
                 {/* Header Info Strip */}
                 <div className="flex items-center justify-between text-xs sm:text-sm pb-2 border-b border-slate-100 dark:border-slate-800">
                   <div className="flex items-center gap-2">
-                    <span className="uppercase tracking-wider text-xs sm:text-sm md:text-base font-black text-[#38BDF8] flex items-center gap-2">
-                      {specialistMainTab === 'marketplace' && <><Briefcase className="w-4 h-4 text-[#38BDF8] shrink-0" /><span><span className="sm:hidden">ক্লায়েন্ট অর্ডারস</span><span className="hidden sm:inline">১. সেলার মার্কেটপ্লেস</span></span></>}
-                      {specialistMainTab === 'mentor' && <><GraduationCap className="w-5 h-5 text-indigo-600 dark:text-sky-400 shrink-0" /><span className="text-indigo-600 dark:text-sky-400 font-black">কোর্স</span></>}
-                      {specialistMainTab === 'payments' && <><Wallet className="w-4 h-4 text-amber-500 shrink-0" /><span className="text-amber-600 dark:text-amber-400"><span className="sm:hidden">স্টেটমেন্ট</span><span className="hidden sm:inline">৩. একাউন্ট স্টেটমেন্ট</span></span></>}
-                      {specialistMainTab === 'ai_toolkit' && <><Sparkles className="w-4 h-4 text-purple-500 shrink-0" /><span className="text-purple-600 dark:text-purple-400">৪. ফ্রি টুলস</span></>}
+                    <span className="uppercase tracking-wider text-xs sm:text-sm md:text-base font-black text-[#E11D48] flex items-center gap-2">
+                      {specialistMainTab === 'marketplace' && <><Briefcase className="w-4 h-4 text-[#E11D48] shrink-0" /><span><span className="sm:hidden">ক্লায়েন্ট অর্ডারস</span><span className="hidden sm:inline">১. সেলার মার্কেটপ্লেস</span></span></>}
+                      {specialistMainTab === 'mentor' && <><GraduationCap className="w-5 h-5 text-[#E11D48] shrink-0" /><span className="text-[#E11D48] font-black">কোর্স</span></>}
+                      {specialistMainTab === 'payments' && <><Wallet className="w-4 h-4 text-[#E11D48] shrink-0" /><span className="text-[#E11D48] dark:text-rose-400"><span className="sm:hidden">স্টেটমেন্ট</span><span className="hidden sm:inline">৩. একাউন্ট স্টেটমেন্ট</span></span></>}
+                      {specialistMainTab === 'ai_toolkit' && <><Sparkles className="w-4 h-4 text-[#E11D48] shrink-0" /><span className="text-[#E11D48] dark:text-rose-400">৪. ফ্রি টুলস</span></>}
                     </span>
                   </div>
                 </div>
@@ -8228,7 +8291,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                         onClick={() => setPayoutSubTab('overview')}
                         className={`py-2 px-2 rounded-xl text-xs sm:text-sm font-black transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap active:scale-95 text-center ${
                           payoutSubTab === 'overview' || payoutSubTab === 'sources'
-                            ? 'bg-[#006A4E] text-white shadow-md'
+                            ? 'bg-[#E11D48] text-white shadow-md'
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700/80'
                         }`}
                       >
@@ -8242,7 +8305,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                         onClick={() => setPayoutSubTab('history')}
                         className={`py-2 px-2 rounded-xl text-xs sm:text-sm font-black transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap active:scale-95 text-center ${
                           payoutSubTab === 'history'
-                            ? 'bg-[#006A4E] text-white shadow-md'
+                            ? 'bg-[#E11D48] text-white shadow-md'
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700/80'
                         }`}
                       >
@@ -8257,7 +8320,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                           setWithdrawSuccess(false);
                           setIsWithdrawModalOpen(true);
                         }}
-                        className="py-2 px-2 rounded-xl text-xs sm:text-sm font-black transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap bg-gradient-to-r from-[#006A4E] to-blue-500 hover:from-[#18a649] hover:to-blue-600 text-white shadow-md active:scale-95 text-center"
+                        className="py-2 px-2 rounded-xl text-xs sm:text-sm font-black transition cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap bg-[#E11D48] hover:bg-[#BE123C] text-white shadow-md active:scale-95 text-center"
                       >
                         <Wallet className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                         <span>ক্যাশআউট</span>
@@ -9635,29 +9698,49 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                     <div className="space-y-6 font-bengali animate-fadeIn">
                       {(() => {
                         const sellerOrdersList = currentUser
-                          ? marketplaceOrders.filter(o => o.sellerId === currentUser.id || (currentUser.email && o.sellerEmail && o.sellerEmail.toLowerCase() === currentUser.email.toLowerCase()))
+                          ? marketplaceOrders.filter(o =>
+                              o.sellerId === currentUser.id ||
+                              (currentUser.email && o.sellerEmail && o.sellerEmail.toLowerCase() === currentUser.email.toLowerCase()) ||
+                              (o.assignedExpertId && o.assignedExpertId === currentUser.id) ||
+                              currentUser.role === 'admin'
+                            )
                           : [];
-                        const completedSellerOrders = sellerOrdersList.filter(o => o.status === "completed");
-                        const mktEarned = completedSellerOrders.reduce((acc, o) => acc + (o.sellerPayout || o.amount || 0), 0);
+
                         const myCourses = currentUser
-                          ? courses.filter(c => (c as any).instructorId === currentUser.id || (currentUser.email && (c as any).instructorEmail && (c as any).instructorEmail.toLowerCase() === currentUser.email.toLowerCase()))
+                          ? courses.filter(c =>
+                              (c as any).instructorId === currentUser.id ||
+                              (currentUser.email && (c as any).instructorEmail && (c as any).instructorEmail.toLowerCase() === currentUser.email.toLowerCase()) ||
+                              currentUser.role === 'admin'
+                            )
                           : [];
+
+                        const mktEarned = sellerOrdersList.reduce((acc, o) => {
+                          const payout = o.sellerPayout || (o.amount ? Math.round(o.amount * 0.9) : 0) || o.amount || 0;
+                          return acc + payout;
+                        }, 0);
+
                         const mntEarned = myCourses.reduce((acc, c) => {
                           const courseEnrollments = (enrollments || []).filter(e => e.courseId === c.id);
-                          return acc + ((c.price || 0) * courseEnrollments.length);
+                          const stCount = Math.max(
+                            courseEnrollments.length,
+                            c.enrolledCount || 0,
+                            (c as any).studentsCount || 0,
+                            (c as any).totalEnrollments || 0
+                          );
+                          const crsFee = c.price || 0;
+                          const courseAmt = stCount > 0 ? stCount * crsFee : crsFee;
+                          return acc + courseAmt;
                         }, 0);
+
                         const totalEarned = mktEarned + mntEarned;
                         const commFee = Math.round(totalEarned * 0.1);
-                        const netEarned = totalEarned - commFee;
+                        const netEarned = Math.max(0, totalEarned - commFee);
 
                         const rawPayouts = currentUser ? payouts.filter(p =>
                           p.teacherId === currentUser.id ||
                           (currentUser.email && p.teacherEmail && p.teacherEmail.toLowerCase() === currentUser.email.toLowerCase())
                         ) : [];
                         const basePayouts = rawPayouts;
-                        const approvedPaidAmount = basePayouts.filter(p => p.status === "Approved" || p.status === "Paid").reduce((acc, p) => acc + p.amount, 0);
-                        const availableBalance = Math.max(0, netEarned - approvedPaidAmount);
-                        const pendingEscrow = sellerOrdersList.filter(o => o.status === "in_progress").reduce((acc, o) => acc + (o.sellerPayout || o.amount || 0), 0);
                         const sellerPayouts = [
                           ...(activePendingPayout ? [{
                             id: activePendingPayout.id,
@@ -9673,6 +9756,10 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                           }] : []),
                           ...basePayouts.filter(p => !activePendingPayout || p.id !== activePendingPayout.id)
                         ];
+                        const approvedPaidAmount = sellerPayouts.filter(p => p.status === "Approved" || p.status === "Paid").reduce((acc, p) => acc + p.amount, 0);
+                        const pendingPayoutAmount = sellerPayouts.filter(p => p.status === "Pending").reduce((acc, p) => acc + p.amount, 0);
+                        const availableBalance = Math.max(0, netEarned - approvedPaidAmount - pendingPayoutAmount);
+                        const pendingEscrow = sellerOrdersList.filter(o => o.status === "in_progress").reduce((acc, o) => acc + (o.sellerPayout || o.amount || 0), 0);
 
                         const approvedPayouts = sellerPayouts.filter(p => p.status === 'Approved' || p.status === 'Paid');
                         const lastCashout = approvedPayouts.length > 0 ? approvedPayouts[0] : sellerPayouts[0];
@@ -9702,234 +9789,515 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                             {/* SUCCESS ALERT BANNER */}
                             {cashoutSuccessMsg && (
                               <div className="space-y-3 animate-fadeIn">
-                                <div className="p-4 bg-blue-500/15 text-[#38BDF8] font-black text-xs sm:text-sm rounded-2xl border-2 border-blue-600/50/50 shadow-md flex items-center justify-between gap-3">
+                                <div className="p-4 bg-rose-500/15 text-[#E11D48] font-black text-xs sm:text-sm rounded-2xl border-2 border-rose-500/30 shadow-md flex items-center justify-between gap-3">
                                   <div className="flex items-center gap-2.5">
-                                    <CheckCircle2 className="w-5 h-5 shrink-0 fill-sky-400 text-slate-950 animate-bounce" />
+                                    <CheckCircle2 className="w-5 h-5 shrink-0 fill-[#E11D48] text-white animate-bounce" />
                                     <span>{cashoutSuccessMsg}</span>
                                   </div>
-                                  <button onClick={() => setCashoutSuccessMsg('')} className="p-1 hover:bg-blue-500/20 rounded-lg text-slate-400 hover:text-white transition cursor-pointer">✕</button>
+                                  <button onClick={() => setCashoutSuccessMsg('')} className="p-1 hover:bg-rose-500/20 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white transition cursor-pointer">✕</button>
                                 </div>
                               </div>
                             )}
 
-                            {/* TAB 1: SUMMARY & BALANCE (SINGLE ROW 4 COMPACT CARDS) */}
-                            {(payoutSubTab === 'overview' || payoutSubTab === 'sources') && (
-                              <div className="space-y-6 animate-fadeIn font-bengali">
-                                {/* 4 Compact Stat Cards in 1 Single Row with Minimal Short Text */}
-                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                                  {/* Card 1: Total Earnings */}
-                                  <div className="p-3.5 sm:p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-1 shadow-xs">
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 truncate">
-                                        <DollarSign className="w-3.5 h-3.5 text-[#38BDF8] shrink-0" /> সর্বমোট আয়
-                                      </span>
-                                      <span className="text-[9px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded font-bold shrink-0">যৌথ</span>
-                                    </div>
-                                    <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">
-                                      ৳{totalEarned.toLocaleString('bn-BD')}
-                                    </div>
-                                    <div className="text-[10px] text-slate-400 font-bold truncate">মার্কেটপ্লেস ও মেন্টর</div>
+                            {/* TAB 1: SUMMARY & BALANCE (4 COMPACT INTERACTIVE FILTER CARDS) */}
+                            {(payoutSubTab === 'overview' || payoutSubTab === 'sources') && (() => {
+                              const withdrawableOrders = sellerOrdersList.filter(o => 
+                                o.status === 'completed' || o.status === 'delivered' || (o as any).status === 'paid' || (o as any).isPaid
+                              );
+                              const withdrawableCourses = myCourses.filter(c => {
+                                const courseEnrollments = (enrollments || []).filter(e => e.courseId === c.id);
+                                const stCount = Math.max(
+                                  courseEnrollments.length,
+                                  c.enrolledCount || 0,
+                                  (c as any).studentsCount || 0,
+                                  (c as any).totalEnrollments || 0
+                                );
+                                return stCount > 0 || (c.price && c.price > 0);
+                              });
+
+                              const displayedCourses = 
+                                earningsCategoryFilter === 'all' ? myCourses :
+                                earningsCategoryFilter === 'courses' ? myCourses :
+                                earningsCategoryFilter === 'withdraw' ? withdrawableCourses : [];
+
+                              const displayedOrders = 
+                                earningsCategoryFilter === 'all' ? sellerOrdersList :
+                                earningsCategoryFilter === 'marketplace' ? sellerOrdersList :
+                                earningsCategoryFilter === 'withdraw' ? withdrawableOrders : [];
+
+                              const displayedCount = displayedCourses.length + displayedOrders.length;
+
+                              const displayedTotal = 
+                                earningsCategoryFilter === 'all' ? totalEarned :
+                                earningsCategoryFilter === 'marketplace' ? mktEarned :
+                                earningsCategoryFilter === 'courses' ? mntEarned :
+                                availableBalance;
+
+                              const sectionTitle = 
+                                earningsCategoryFilter === 'all' ? 'সর্বমোট আয় ও লাইভ কাজ তালিকা' :
+                                earningsCategoryFilter === 'marketplace' ? '১. মার্কেটপ্লেস অর্ডার ও প্রজেক্ট' :
+                                earningsCategoryFilter === 'courses' ? '২. মেন্টর ও কোর্স তালিকা' :
+                                'ক্যাশআউট ও পেআউট হিস্টোরি';
+
+                              return (
+                                <div className="space-y-4 sm:space-y-5 animate-fadeIn font-bengali">
+                                  {/* 4 Compact Interactive Filter Cards */}
+                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5 sm:gap-2.5">
+                                    {/* Card 1: সর্বমোট আয় */}
+                                    <button
+                                      type="button"
+                                      onClick={() => setEarningsCategoryFilter('all')}
+                                      title={`সর্বমোট আয়: ৳${totalEarned.toLocaleString('bn-BD')}`}
+                                      className={`p-2 sm:p-2.5 rounded-xl border text-left cursor-pointer transition active:scale-95 flex flex-col justify-between min-w-0 overflow-hidden ${
+                                        earningsCategoryFilter === 'all'
+                                          ? 'bg-[#E11D48] text-white border-[#E11D48] shadow-md'
+                                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-2xs'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-1 min-w-0">
+                                        <DollarSign className={`w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 ${earningsCategoryFilter === 'all' ? 'text-white' : 'text-[#E11D48]'}`} />
+                                        <span className={`text-[10px] min-[380px]:text-[11px] font-bold truncate ${
+                                          earningsCategoryFilter === 'all' ? 'text-white/95' : 'text-slate-600 dark:text-slate-300'
+                                        }`}>
+                                          সর্বমোট আয়
+                                        </span>
+                                      </div>
+                                      <div
+                                        title={`৳${totalEarned.toLocaleString('bn-BD')}`}
+                                        className={`mt-1 text-[12px] min-[360px]:text-[13px] sm:text-[13.5px] lg:text-[13px] xl:text-sm font-black tracking-tight tabular-nums truncate font-mono ${
+                                          earningsCategoryFilter === 'all' ? 'text-white' : 'text-slate-900 dark:text-white'
+                                        }`}
+                                      >
+                                        ৳{totalEarned.toLocaleString('bn-BD')}
+                                      </div>
+                                    </button>
+
+                                    {/* Card 2: ক্যাশআউট ব্যালেন্স */}
+                                    <button
+                                      type="button"
+                                      onClick={() => setEarningsCategoryFilter('withdraw')}
+                                      title={`ক্যাশআউট ব্যালেন্স: ৳${availableBalance.toLocaleString('bn-BD')}`}
+                                      className={`p-2 sm:p-2.5 rounded-xl border text-left cursor-pointer transition active:scale-95 flex flex-col justify-between min-w-0 overflow-hidden ${
+                                        earningsCategoryFilter === 'withdraw'
+                                          ? 'bg-[#E11D48] text-white border-[#E11D48] shadow-md'
+                                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-rose-300 dark:hover:border-rose-900/60 shadow-2xs'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-1 min-w-0">
+                                        <Wallet className={`w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 ${earningsCategoryFilter === 'withdraw' ? 'text-white' : 'text-[#E11D48]'}`} />
+                                        <span className={`text-[10px] min-[380px]:text-[11px] font-bold truncate ${
+                                          earningsCategoryFilter === 'withdraw' ? 'text-white/95' : 'text-slate-600 dark:text-slate-300'
+                                        }`}>
+                                          ক্যাশআউট ব্যালেন্স
+                                        </span>
+                                      </div>
+                                      <div
+                                        title={`৳${availableBalance.toLocaleString('bn-BD')}`}
+                                        className={`mt-1 text-[12px] min-[360px]:text-[13px] sm:text-[13.5px] lg:text-[13px] xl:text-sm font-black tracking-tight tabular-nums truncate font-mono ${
+                                          earningsCategoryFilter === 'withdraw' ? 'text-white' : 'text-[#E11D48]'
+                                        }`}
+                                      >
+                                        ৳{availableBalance.toLocaleString('bn-BD')}
+                                      </div>
+                                    </button>
+
+                                    {/* Card 3: ১. মার্কেটপ্লেস */}
+                                    <button
+                                      type="button"
+                                      onClick={() => setEarningsCategoryFilter('marketplace')}
+                                      title={`১. মার্কেটপ্লেস: ৳${mktEarned.toLocaleString('bn-BD')}`}
+                                      className={`p-2 sm:p-2.5 rounded-xl border text-left cursor-pointer transition active:scale-95 flex flex-col justify-between min-w-0 overflow-hidden ${
+                                        earningsCategoryFilter === 'marketplace'
+                                          ? 'bg-[#E11D48] text-white border-[#E11D48] shadow-md'
+                                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-2xs'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-1 min-w-0">
+                                        <ShoppingBag className={`w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 ${earningsCategoryFilter === 'marketplace' ? 'text-white' : 'text-slate-400'}`} />
+                                        <span className={`text-[10px] min-[380px]:text-[11px] font-bold truncate ${
+                                          earningsCategoryFilter === 'marketplace' ? 'text-white/95' : 'text-slate-600 dark:text-slate-300'
+                                        }`}>
+                                          ১. মার্কেটপ্লেস
+                                        </span>
+                                      </div>
+                                      <div
+                                        title={`৳${mktEarned.toLocaleString('bn-BD')}`}
+                                        className={`mt-1 text-[12px] min-[360px]:text-[13px] sm:text-[13.5px] lg:text-[13px] xl:text-sm font-black tracking-tight tabular-nums truncate font-mono ${
+                                          earningsCategoryFilter === 'marketplace' ? 'text-white' : 'text-slate-900 dark:text-white'
+                                        }`}
+                                      >
+                                        ৳{mktEarned.toLocaleString('bn-BD')}
+                                      </div>
+                                    </button>
+
+                                    {/* Card 4: ২. মেন্টর ও কোর্স */}
+                                    <button
+                                      type="button"
+                                      onClick={() => setEarningsCategoryFilter('courses')}
+                                      title={`২. মেন্টর ও কোর্স: ৳${mntEarned.toLocaleString('bn-BD')}`}
+                                      className={`p-2 sm:p-2.5 rounded-xl border text-left cursor-pointer transition active:scale-95 flex flex-col justify-between min-w-0 overflow-hidden ${
+                                        earningsCategoryFilter === 'courses'
+                                          ? 'bg-[#E11D48] text-white border-[#E11D48] shadow-md'
+                                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-2xs'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-1 min-w-0">
+                                        <GraduationCap className={`w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 ${earningsCategoryFilter === 'courses' ? 'text-white' : 'text-slate-400'}`} />
+                                        <span className={`text-[10px] min-[380px]:text-[11px] font-bold truncate ${
+                                          earningsCategoryFilter === 'courses' ? 'text-white/95' : 'text-slate-600 dark:text-slate-300'
+                                        }`}>
+                                          ২. মেন্টর ও কোর্স
+                                        </span>
+                                      </div>
+                                      <div
+                                        title={`৳${mntEarned.toLocaleString('bn-BD')}`}
+                                        className={`mt-1 text-[12px] min-[360px]:text-[13px] sm:text-[13.5px] lg:text-[13px] xl:text-sm font-black tracking-tight tabular-nums truncate font-mono ${
+                                          earningsCategoryFilter === 'courses' ? 'text-white' : 'text-slate-900 dark:text-white'
+                                        }`}
+                                      >
+                                        ৳{mntEarned.toLocaleString('bn-BD')}
+                                      </div>
+                                    </button>
                                   </div>
 
-                                  {/* Card 2: Cashout Ready Balance */}
-                                  <div className="p-3.5 sm:p-4 bg-blue-500/10 dark:bg-slate-950/30 border-2 border-blue-600/50 rounded-2xl space-y-1 shadow-xs">
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-xs font-black text-blue-900 dark:text-sky-400 flex items-center gap-1.5 truncate">
-                                        <Wallet className="w-3.5 h-3.5 text-[#38BDF8] shrink-0" /> ক্যাশআউট ব্যালেন্স
-                                      </span>
-                                      <span className="text-[9px] text-[#38BDF8] bg-[#006A4E]/20 px-1.5 py-0.5 rounded font-black shrink-0">উইথড্র রেডি</span>
-                                    </div>
-                                    <div className="text-lg sm:text-xl font-black text-[#38BDF8] tracking-tight">
-                                      ৳{availableBalance.toLocaleString('bn-BD')}
-                                    </div>
-                                    <div className="text-[10px] text-blue-700 dark:text-sky-400 font-bold truncate">উইথড্র করার জন্য প্রস্তুত</div>
-                                  </div>
-
-                                  {/* Card 3: Marketplace Earnings */}
-                                  <div className="p-3.5 sm:p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-1 shadow-xs">
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 truncate">
-                                        <ShoppingBag className="w-3.5 h-3.5 text-purple-400 shrink-0" /> ১. মার্কেটপ্লেস আয়
-                                      </span>
-                                      <span className="text-[9px] text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded font-bold shrink-0">গিগ</span>
-                                    </div>
-                                    <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">
-                                      ৳{mktEarned.toLocaleString('bn-BD')}
-                                    </div>
-                                    <div className="text-[10px] text-slate-400 font-bold truncate">গিগ ও প্রজেক্ট</div>
-                                  </div>
-
-                                  {/* Card 4: Mentor & Courses Earnings */}
-                                  <div className="p-3.5 sm:p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-1 shadow-xs">
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 truncate">
-                                        <GraduationCap className="w-3.5 h-3.5 text-sky-400 shrink-0" /> ২. মেন্টর ও কোর্স
-                                      </span>
-                                      <span className="text-[9px] text-sky-400 bg-indigo-500/10 px-1.5 py-0.5 rounded font-bold shrink-0">কোর্স ফি</span>
-                                    </div>
-                                    <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">
-                                      ৳{mntEarned.toLocaleString('bn-BD')}
-                                    </div>
-                                    <div className="text-[10px] text-slate-400 font-bold truncate">কোর্স ও স্টুডেন্ট এনরোলমেন্ট</div>
-                                  </div>
-                                </div>
-
-                                {/* UNIFIED SECTION: COMBINED COURSES & MARKETPLACE PROJECTS */}
-                                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-xs font-bengali">
-                                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
-                                    <div className="flex items-center gap-2">
-                                      <Sparkles className="w-4 h-4 text-[#38BDF8]" />
+                                  {/* UNIFIED SECTION: FILTERED COURSES & MARKETPLACE PROJECTS */}
+                                  <div className="space-y-3 font-bengali bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 md:bg-transparent md:border-0 md:p-0 md:shadow-none shadow-xs">
+                                    <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
                                       <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white">
-                                        লাইভ কাজ ও আয়ের তালিকা ({myCourses.length + sellerOrdersList.length})
+                                        {sectionTitle} ({earningsCategoryFilter === 'withdraw' ? sellerPayouts.length : displayedCount}টি)
                                       </h3>
+                                      <span className="text-xs sm:text-sm font-black text-[#E11D48] font-mono">
+                                        ৳{displayedTotal.toLocaleString('bn-BD')}
+                                      </span>
                                     </div>
-                                    <span className="text-[11px] font-black text-[#38BDF8]">
-                                      যৌথ মোট: ৳{totalEarned.toLocaleString('bn-BD')}
-                                    </span>
-                                  </div>
 
-                                  {myCourses.length === 0 && sellerOrdersList.length === 0 ? (
-                                    <div className="py-10 text-center text-slate-400 space-y-2">
-                                      <Package className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-700" />
-                                      <p className="text-xs font-bold text-slate-500 dark:text-slate-400">এখনো কোনো কাজ বা আয়ের রেকর্ড পাওয়া যায়নি (৳০)।</p>
-                                      <p className="text-[11px] text-slate-400">আপনার নিজস্ব সার্ভিস অর্ডার সম্পন্ন হলে অথবা কোর্স বিক্রি হলে এখানে তালিকাটি স্বয়ংক্রিয়ভাবে প্রদর্শিত হবে।</p>
-                                    </div>
-                                  ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                      {/* 1. COURSES */}
-                                      {myCourses.map((course, idx) => {
-                                        const courseEnrollments = (enrollments || []).filter(e => e.courseId === course.id);
-                                        const stCount = courseEnrollments.length;
-                                        const crsFee = course.price || 0;
-                                        const crsTotal = stCount * crsFee;
-                                        const isCompleted = stCount > 0;
-                                        const progressPct = isCompleted ? 100 : 0;
-
-                                        return (
-                                          <div
-                                            key={`crs-${course.id || idx}`}
-                                            className="p-3 sm:p-3.5 rounded-xl border border-l-4 border-l-[#006A4E] bg-blue-500/5 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800 transition flex flex-col justify-between gap-2.5 shadow-xs"
-                                          >
-                                            {/* Title, Badge & Tag */}
-                                            <div className="flex items-start justify-between gap-2">
-                                              <div className="min-w-0">
-                                                <div className="flex items-center gap-1.5 mb-1">
-                                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-indigo-500/10 text-indigo-600 dark:text-sky-400 border border-indigo-500/20">
-                                                    🎓 কোর্স
-                                                  </span>
-                                                </div>
-                                                <h4 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate">
-                                                  {course.title}
-                                                </h4>
-                                                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold mt-0.5">
-                                                  {stCount} জন ছাত্র • ফি: ৳{crsFee.toLocaleString('bn-BD')}
-                                                </p>
-                                              </div>
-                                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black shrink-0 bg-blue-500/15 text-[#38BDF8] border border-blue-600/50/30">
-                                                {isCompleted ? '✓ অ্যাক্টিভ' : '০ এনরোলমেন্ট'}
-                                              </span>
-                                            </div>
-
-                                            {/* Progress bar & Amount */}
-                                            <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                                              <div className="flex items-center gap-2">
-                                                <div className="w-20 bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                                                  <div
-                                                    className="h-full rounded-full bg-[#006A4E]"
-                                                    style={{ width: `${progressPct}%` }}
-                                                  />
-                                                </div>
-                                                <span className="text-[10px] text-slate-400 font-bold">{progressPct}%</span>
-                                              </div>
-                                              <span className="text-xs sm:text-sm font-black text-[#38BDF8]">
-                                                ৳{crsTotal.toLocaleString('bn-BD')}
-                                              </span>
+                                    {/* Direct Cashout Action Banner when 'withdraw' is selected */}
+                                    {earningsCategoryFilter === 'withdraw' && (
+                                      <div className="p-3 sm:p-3.5 rounded-xl bg-gradient-to-r from-rose-500/10 via-rose-500/5 to-transparent border border-[#E11D48]/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                                        <div className="flex items-center gap-2.5">
+                                          <div className="w-8 h-8 rounded-lg bg-[#E11D48]/15 text-[#E11D48] flex items-center justify-center shrink-0">
+                                            <Wallet className="w-4 h-4" />
+                                          </div>
+                                          <div>
+                                            <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400">উত্তোলনযোগ্য প্রস্তুত ক্যাশআউট ব্যালেন্স</div>
+                                            <div className="text-sm sm:text-base font-black text-[#E11D48] font-mono">
+                                              ৳{availableBalance.toLocaleString('bn-BD')}
                                             </div>
                                           </div>
-                                        );
-                                      })}
-
-                                      {/* 2. MARKETPLACE PROJECTS & ORDERS */}
-                                      {sellerOrdersList.map((item: any, idx: number) => {
-                                        const title = item.gigTitle || item.title || 'মার্কেটপ্লেস সার্ভিস অর্ডার';
-                                        const clientName = item.buyerName || 'ক্লায়েন্ট';
-                                        const orderId = item.id || `ord-${idx + 1}`;
-                                        const amount = item.sellerPayout || item.amount || 0;
-                                        const isCompleted = item.status === 'completed';
-                                        const progressPct = isCompleted ? 100 : item.status === 'in_progress' ? 65 : 30;
-
-                                        return (
-                                          <div
-                                            key={`mkt-${orderId}`}
-                                            className={`p-3 sm:p-3.5 rounded-xl border transition flex flex-col justify-between gap-2.5 shadow-xs ${
-                                              isCompleted
-                                                ? 'border-l-4 border-l-[#006A4E] bg-blue-500/5 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800'
-                                                : 'border-l-4 border-l-purple-500 bg-purple-500/5 dark:bg-purple-950/20 border-slate-200 dark:border-slate-800'
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setWithdrawSuccess(false);
+                                              setIsWithdrawModalOpen(true);
+                                            }}
+                                            disabled={availableBalance <= 0}
+                                            className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-xs ${
+                                              availableBalance > 0
+                                                ? 'bg-[#E11D48] hover:bg-[#BE123C] text-white active:scale-95'
+                                                : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
                                             }`}
                                           >
-                                            {/* Title, Badge & Tag */}
-                                            <div className="flex items-start justify-between gap-2">
-                                              <div className="min-w-0">
-                                                <div className="flex items-center gap-1.5 mb-1">
-                                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                                                    🛍️ মার্কেটপ্লেস
-                                                  </span>
-                                                </div>
-                                                <h4 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate">
-                                                  {title}
-                                                </h4>
-                                                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold mt-0.5">
-                                                  ক্লায়েন্ট: {clientName} • #{orderId}
-                                                </p>
-                                              </div>
-                                              <span
-                                                className={`px-2 py-0.5 rounded-full text-[10px] font-black shrink-0 ${
-                                                  isCompleted
-                                                    ? 'bg-blue-500/15 text-[#38BDF8] border border-blue-600/50/30'
-                                                    : 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
-                                                }`}
-                                              >
-                                                {isCompleted ? '✓ সম্পন্ন' : item.status === 'in_progress' ? 'চলমান' : 'পেন্ডিং'}
-                                              </span>
-                                            </div>
+                                            <Send className="w-3.5 h-3.5" />
+                                            <span>{availableBalance > 0 ? 'ক্যাশআউট রিকোয়েস্ট পাঠান' : 'ব্যালেন্স নেই'}</span>
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
 
-                                            {/* Progress bar & Amount */}
-                                            <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                                              <div className="flex items-center gap-2">
-                                                <div className="w-20 bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                                                  <div
-                                                    className={`h-full rounded-full ${isCompleted ? 'bg-[#006A4E]' : 'bg-purple-500'}`}
-                                                    style={{ width: `${progressPct}%` }}
-                                                  />
-                                                </div>
-                                                <span className="text-[10px] text-slate-400 font-bold">{progressPct}%</span>
-                                              </div>
-                                              <span className="text-xs sm:text-sm font-black text-purple-400">
-                                                ৳{amount.toLocaleString('bn-BD')}
-                                              </span>
-                                            </div>
+                                    {earningsCategoryFilter === 'withdraw' ? (
+                                      <div className="space-y-2.5">
+                                        {sellerPayouts.length === 0 ? (
+                                          <div className="py-8 text-center text-slate-400 space-y-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+                                            <Package className="w-7 h-7 mx-auto text-slate-300 dark:text-slate-700" />
+                                            <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                                              এখনো কোনো ক্যাশআউট হিস্টোরি তৈরি হয়নি।
+                                            </p>
                                           </div>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
+                                        ) : (
+                                          <div className="space-y-2">
+                                            {sellerPayouts.map((p) => {
+                                              const isPending = p.status === 'Pending';
+                                              const isPaid = p.status === 'Approved' || p.status === 'Paid';
+
+                                              return (
+                                                <div
+                                                  key={`payout-${p.id}`}
+                                                  className={`p-3 sm:p-3.5 rounded-xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs ${
+                                                    isPending
+                                                      ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/60'
+                                                      : isPaid
+                                                      ? 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
+                                                      : 'bg-rose-500/5 dark:bg-rose-950/20 border-rose-500/30'
+                                                  }`}
+                                                >
+                                                  <div className="flex items-center gap-2.5 min-w-0">
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-black shrink-0 ${
+                                                      isPaid
+                                                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                                                        : isPending
+                                                        ? 'bg-rose-500/15 text-[#E11D48] dark:text-rose-400 border border-rose-500/30'
+                                                        : 'bg-rose-500/15 text-rose-500 border border-rose-500/20'
+                                                    }`}>
+                                                      {isPaid ? '✓ পরিশোধিত' : isPending ? '⏳ পেন্ডিং' : '✕ বাতিল'}
+                                                    </span>
+                                                    <div className="min-w-0">
+                                                      <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5 flex-wrap">
+                                                        <span>{p.paymentMethod}</span>
+                                                        <span className="font-mono text-slate-500 text-[11px]">({p.accountNumber})</span>
+                                                        <span className="text-[10px] text-slate-400">• #{p.id}</span>
+                                                      </div>
+                                                      <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                                                        {p.requestedAt} {p.note ? `• ${p.note}` : ''}
+                                                      </div>
+                                                    </div>
+                                                  </div>
+
+                                                  <div className="flex items-center gap-2.5 sm:gap-3 shrink-0 justify-between sm:justify-end">
+                                                    <span className="text-xs sm:text-sm font-black text-[#E11D48] font-mono">
+                                                      ৳{p.amount.toLocaleString('bn-BD')}
+                                                    </span>
+
+                                                    {/* ACTION BUTTONS (3-DOT MENU ONLY) */}
+                                                    <div className="flex items-center gap-1.5">
+                                                      {isPending ? (
+                                                        <div className="relative inline-block text-left">
+                                                            <button
+                                                              type="button"
+                                                              onClick={(e) => {
+                                                                e.preventDefault();
+                                                                e.stopPropagation();
+                                                                setOpenPayoutMenuId(openPayoutMenuId === p.id ? null : p.id);
+                                                              }}
+                                                              title="৩ ডট অপশন (এডিট / বাতিল)"
+                                                              className={`p-1.5 sm:p-2 rounded-xl border transition cursor-pointer flex items-center justify-center shadow-xs ${
+                                                                openPayoutMenuId === p.id
+                                                                  ? 'bg-[#E11D48] text-white border-[#E11D48]'
+                                                                  : 'bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-[#E11D48]/40'
+                                                              }`}
+                                                            >
+                                                              <MoreVertical className="w-4 h-4" />
+                                                            </button>
+
+                                                            {openPayoutMenuId === p.id && (
+                                                              <>
+                                                                {/* Fixed invisible backdrop to close dropdown cleanly */}
+                                                                <div
+                                                                  className="fixed inset-0 z-40 bg-transparent"
+                                                                  onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setOpenPayoutMenuId(null);
+                                                                  }}
+                                                                />
+                                                                <div
+                                                                  onClick={(e) => e.stopPropagation()}
+                                                                  className="absolute right-0 z-50 w-44 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-1.5 shadow-2xl backdrop-blur-xl animate-fadeIn space-y-1 text-left font-sans top-full mt-1"
+                                                                >
+                                                                  <div className="px-2 py-1 border-b border-slate-100 dark:border-slate-800 flex items-center gap-1.5 text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                                                                    <Clock className="w-3 h-3 text-[#E11D48]" />
+                                                                    <span>পেন্ডিং আবেদন অপশন</span>
+                                                                  </div>
+                                                                  <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                      e.preventDefault();
+                                                                      e.stopPropagation();
+                                                                      setOpenPayoutMenuId(null);
+                                                                      setEditPendingError('');
+                                                                      setEditPendingPayoutId(p.id);
+                                                                      setEditPendingAmount(p.amount);
+                                                                      setEditPendingMethod((p.paymentMethod || 'bKash') as any);
+                                                                      setEditPendingAccount(p.accountNumber || '');
+                                                                      setIsEditPendingModalOpen(true);
+                                                                    }}
+                                                                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-rose-50 dark:hover:bg-rose-500/15 hover:text-[#E11D48] dark:hover:text-rose-400 transition cursor-pointer"
+                                                                  >
+                                                                    <Pencil className="w-3.5 h-3.5 text-[#E11D48]" />
+                                                                    <span>এডিট করুন</span>
+                                                                  </button>
+                                                                  <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                      e.preventDefault();
+                                                                      e.stopPropagation();
+                                                                      handleDeletePendingPayout(p.id, p.amount);
+                                                                    }}
+                                                                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/15 transition cursor-pointer"
+                                                                  >
+                                                                    <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                                                                    <span>বাতিল / ডিলিট করুন</span>
+                                                                  </button>
+                                                                </div>
+                                                              </>
+                                                            )}
+                                                          </div>
+                                                        ) : (
+                                                        <span className="p-1 text-slate-400 dark:text-slate-600 flex items-center" title="পেমেন্ট পরিশোধ সম্পন্ন">
+                                                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500/80" />
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : displayedCount === 0 ? (
+                                      <div className="py-8 text-center text-slate-400 space-y-2 bg-white dark:bg-slate-900 md:rounded-2xl md:border md:border-slate-200 md:dark:border-slate-800">
+                                        <Package className="w-7 h-7 mx-auto text-slate-300 dark:text-slate-700" />
+                                        <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                                          {earningsCategoryFilter === 'marketplace' ? 'মার্কেটপ্লেসে কোনো অর্ডারের রেকর্ড পাওয়া যায়নি।' :
+                                           earningsCategoryFilter === 'courses' ? 'মেন্টরিং ও কোর্সে কোনো রেকর্ড পাওয়া যায়নি।' :
+                                           'এই ক্যাটাগরিতে কোনো কাজের রেকর্ড পাওয়া যায়নি (৳০)।'}
+                                        </p>
+                                        <button
+                                          type="button"
+                                          onClick={() => setEarningsCategoryFilter('all')}
+                                          className="text-xs font-black text-[#E11D48] hover:underline cursor-pointer"
+                                        >
+                                          সবগুলো কাজ প্রদর্শন করুন
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="grid grid-cols-1 gap-2.5">
+                                        {/* 1. COURSES */}
+                                        {displayedCourses.map((course, idx) => {
+                                          const courseEnrollments = (enrollments || []).filter(e => e.courseId === course.id);
+                                          const stCount = Math.max(
+                                            courseEnrollments.length,
+                                            course.enrolledCount || 0,
+                                            (course as any).studentsCount || 0,
+                                            (course as any).totalEnrollments || 0
+                                          );
+                                          const crsFee = course.price || 0;
+                                          const crsTotal = stCount > 0 ? stCount * crsFee : crsFee;
+                                          const isCompleted = stCount > 0;
+                                          const progressPct = isCompleted ? 100 : 0;
+
+                                          return (
+                                            <div
+                                              key={`crs-${course.id || idx}`}
+                                              className="p-3 sm:p-3.5 rounded-xl border border-l-4 border-l-[#E11D48] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 transition flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs hover:border-[#E11D48]/50"
+                                            >
+                                              {/* Title, Badge & Tag */}
+                                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                                <span className="px-2 py-0.5 rounded text-[9px] font-black bg-rose-500/10 text-[#E11D48] dark:text-rose-400 border border-rose-500/20 shrink-0">
+                                                  🎓 কোর্স
+                                                </span>
+                                                <div className="min-w-0">
+                                                  <h4 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate">
+                                                    {course.title}
+                                                  </h4>
+                                                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold mt-0.5">
+                                                    {stCount} জন ছাত্র • ফি: ৳{crsFee.toLocaleString('bn-BD')}
+                                                  </p>
+                                                </div>
+                                              </div>
+
+                                              {/* Progress bar, Status & Amount */}
+                                              <div className="flex items-center gap-3 sm:gap-4 shrink-0 justify-between md:justify-end border-t md:border-t-0 pt-2 md:pt-0 border-slate-100 dark:border-slate-800/80">
+                                                <div className="flex items-center gap-2">
+                                                  <div className="w-16 sm:w-20 bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                                                    <div
+                                                      className="h-full rounded-full bg-[#E11D48]"
+                                                      style={{ width: `${progressPct}%` }}
+                                                    />
+                                                  </div>
+                                                  <span className="text-[10px] text-slate-400 font-bold">{progressPct}%</span>
+                                                </div>
+                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black shrink-0 bg-rose-500/15 text-[#E11D48] border border-rose-500/30">
+                                                  {isCompleted ? '✓ অ্যাক্টিভ' : '০ এনরোল'}
+                                                </span>
+                                                <span className="text-xs sm:text-sm font-black text-[#E11D48] min-w-[70px] text-right font-mono">
+                                                  ৳{crsTotal.toLocaleString('bn-BD')}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+
+                                        {/* 2. MARKETPLACE PROJECTS & ORDERS */}
+                                        {displayedOrders.map((item: any, idx: number) => {
+                                          const title = item.gigTitle || item.title || 'মার্কেটপ্লেস সার্ভিস অর্ডার';
+                                          const clientName = item.buyerName || 'ক্লায়েন্ট';
+                                          const orderId = item.id || `ord-${idx + 1}`;
+                                          const amount = item.sellerPayout || (item.amount ? Math.round(item.amount * 0.9) : 0) || item.amount || 0;
+                                          const isCompleted = item.status === 'completed';
+                                          const progressPct = isCompleted ? 100 : item.status === 'in_progress' ? 65 : 30;
+
+                                          return (
+                                            <div
+                                              key={`mkt-${orderId}`}
+                                              className="p-3 sm:p-3.5 rounded-xl border border-l-4 border-l-[#E11D48] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 transition flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs hover:border-[#E11D48]/50"
+                                            >
+                                              {/* Title, Badge & Tag */}
+                                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                                <span className="px-2 py-0.5 rounded text-[9px] font-black bg-rose-500/10 text-[#E11D48] dark:text-rose-400 border border-rose-500/20 shrink-0">
+                                                  🛍️ মার্কেটপ্লেস
+                                                </span>
+                                                <div className="min-w-0">
+                                                  <h4 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate">
+                                                    {title}
+                                                  </h4>
+                                                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold mt-0.5">
+                                                    ক্লায়েন্ট: {clientName} • #{orderId}
+                                                  </p>
+                                                </div>
+                                              </div>
+
+                                              {/* Progress bar, Status & Amount */}
+                                              <div className="flex items-center gap-3 sm:gap-4 shrink-0 justify-between md:justify-end border-t md:border-t-0 pt-2 md:pt-0 border-slate-100 dark:border-slate-800/80">
+                                                <div className="flex items-center gap-2">
+                                                  <div className="w-16 sm:w-20 bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                                                    <div
+                                                      className="h-full rounded-full bg-[#E11D48]"
+                                                      style={{ width: `${progressPct}%` }}
+                                                    />
+                                                  </div>
+                                                  <span className="text-[10px] text-slate-400 font-bold">{progressPct}%</span>
+                                                </div>
+                                                <span
+                                                  className="px-2 py-0.5 rounded-full text-[10px] font-black shrink-0 bg-rose-500/15 text-[#E11D48] border border-rose-500/30"
+                                                >
+                                                  {isCompleted ? '✓ সম্পন্ন' : item.status === 'in_progress' ? 'চলমান' : 'পেন্ডিং'}
+                                                </span>
+                                                <span className="text-xs sm:text-sm font-black text-[#E11D48] min-w-[70px] text-right font-mono">
+                                                  ৳{amount.toLocaleString('bn-BD')}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            )}
+                              );
+                            })()}
 
                             {/* TAB 3: WITHDRAW */}
                             {payoutSubTab === 'withdraw' && (
-                              <div className="space-y-4 animate-fadeIn">
+                              <div className="space-y-4 animate-fadeIn font-bengali">
                                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 space-y-5 shadow-sm">
                                   <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
                                     <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
-                                      <CreditCard className="w-5 h-5 text-[#38BDF8]" />
+                                      <CreditCard className="w-5 h-5 text-[#E11D48]" />
                                       <span>বিল ক্যাশআউট উইথড্রয়াল ফরম</span>
                                     </h3>
-                                    <span className="text-[10px] font-bold px-2.5 py-0.5 bg-blue-500/10 text-[#38BDF8] rounded-full border border-blue-600/50/30">
+                                    <span className="text-[10px] font-bold px-2.5 py-0.5 bg-rose-500/10 text-[#E11D48] rounded-full border border-rose-500/30">
                                       ইনস্ট্যান্ট পেআউট
                                     </span>
                                   </div>
+
+                                  {availableBalance <= 0 && (
+                                    <div className="p-2 sm:p-2.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs font-bold text-[#E11D48] flex items-center gap-2">
+                                      <AlertCircle className="w-4 h-4 shrink-0" />
+                                      <span>ব্যালেন্স নেই (৳০)</span>
+                                    </div>
+                                  )}
 
                                   <form onSubmit={handleCashoutSubmit} className="space-y-4">
                                     <div className="space-y-2">
@@ -9949,7 +10317,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                             onClick={() => setCashoutMethod(m.id as any)}
                                             className={`p-2.5 rounded-xl border font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
                                               cashoutMethod === m.id
-                                                ? 'bg-[#006A4E] text-white border-blue-600/50 shadow-sm'
+                                                ? 'bg-[#E11D48] text-white border-[#E11D48] shadow-sm'
                                                 : 'bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800'
                                             }`}
                                           >
@@ -9997,10 +10365,10 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                           type="number"
                                           required
                                           min={500}
-                                          max={availableBalance}
+                                          max={availableBalance > 0 ? availableBalance : undefined}
                                           value={cashoutAmount}
                                           onChange={(e) => setCashoutAmount(Number(e.target.value))}
-                                          className="w-full p-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl font-black text-[#38BDF8]"
+                                          className="w-full p-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl font-black text-[#E11D48]"
                                         />
                                         <div className="flex gap-1 mt-1.5">
                                           {[1000, 5000, 10000, availableBalance].map((amt, idx) => (
@@ -10008,7 +10376,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                               key={idx}
                                               type="button"
                                               onClick={() => setCashoutAmount(amt)}
-                                              className="px-2 py-0.5 bg-slate-100 hover:bg-[#006A4E] dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-white text-[10px] font-bold rounded transition"
+                                              className="px-2 py-0.5 bg-slate-100 hover:bg-[#E11D48] dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-white text-[10px] font-bold rounded transition cursor-pointer"
                                             >
                                               ৳{amt.toLocaleString('bn-BD')} {amt === availableBalance ? '(Max)' : ''}
                                             </button>
@@ -10033,10 +10401,16 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                     <div className="flex items-center justify-end gap-2 pt-2">
                                       <button
                                         type="submit"
-                                        className="px-6 py-2.5 bg-[#006A4E] hover:bg-[#19a34a] text-white font-black text-xs rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer"
+                                        disabled={availableBalance <= 0 || cashoutAmount <= 0 || cashoutAmount > availableBalance}
+                                        className={`px-6 py-2.5 font-black text-xs rounded-xl shadow-md transition flex items-center gap-1.5 ${
+                                          availableBalance <= 0 || cashoutAmount <= 0 || cashoutAmount > availableBalance
+                                            ? 'bg-slate-300 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                                            : 'bg-[#E11D48] hover:bg-[#BE123C] text-white cursor-pointer active:scale-95'
+                                        }`}
+                                        title={availableBalance <= 0 ? 'ব্যালেন্স না থাকায় বিল রিকোয়েস্ট অনুরোধ করা যাবে না' : 'ক্যাশআউট রিকোয়েস্ট সাবমিট করুন'}
                                       >
-                                        <Send className="w-4 h-4 fill-slate-950" />
-                                        <span>ক্যাশআউট রিকোয়েস্ট সাবমিট করুন</span>
+                                        <Send className="w-4 h-4 fill-white" />
+                                        <span>{availableBalance <= 0 ? 'বিল রিকোয়েস্ট অনুরোধ (ব্যালেন্স নেই)' : 'ক্যাশআউট রিকোয়েস্ট সাবমিট করুন'}</span>
                                       </button>
                                     </div>
                                   </form>
@@ -10044,57 +10418,116 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                               </div>
                             )}
 
-                            {/* TAB 4: HISTORY (STREAMLINED CLEAN 1-LINE FILTER & TRANSACTIONS) */}
+                            {/* TAB 4: HISTORY */}
                             {payoutSubTab === 'history' && (
                               <div className="space-y-4 animate-fadeIn font-bengali">
-                                {/* STREAMLINED FILTER BAR */}
-                                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 sm:p-4 shadow-xs">
-                                  <div className="flex items-center justify-between gap-2 overflow-x-auto scrollbar-none">
-                                    {/* STATUS FILTER PILLS IN 1 COMPACT LINE */}
-                                    <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-bold shrink-0">
-                                      {[
-                                        { id: 'All', label: 'সবগুলো', count: sellerPayouts.length, activeBg: 'bg-[#006A4E] text-white', defaultBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700' },
-                                        { id: 'Pending', label: '⏳ পেন্ডিং', count: sellerPayouts.filter(p => p.status === 'Pending').length, activeBg: 'bg-amber-500 text-white', defaultBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20' },
-                                        { id: 'Approved', label: '✓ পরিশোধিত', count: sellerPayouts.filter(p => p.status === 'Approved' || p.status === 'Paid').length, activeBg: 'bg-blue-500 text-white', defaultBg: 'bg-blue-500/10 text-[#006A4E] dark:text-sky-400 hover:bg-blue-500/20' }
-                                      ].map(btn => (
-                                        <button
-                                          key={btn.id}
-                                          type="button"
-                                          onClick={() => setPayoutStatusFilter(btn.id as any)}
-                                          className={`px-3 py-1.5 rounded-xl transition cursor-pointer text-xs shrink-0 flex items-center gap-1.5 active:scale-95 ${
-                                            payoutStatusFilter === btn.id
-                                              ? `${btn.activeBg} font-black shadow-xs`
-                                              : btn.defaultBg
-                                          }`}
-                                        >
-                                          <span>{btn.label}</span>
-                                          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
-                                            payoutStatusFilter === btn.id ? 'bg-white/25 text-white' : 'bg-black/10 dark:bg-white/10'
-                                          }`}>
-                                            {btn.count}
-                                          </span>
-                                        </button>
-                                      ))}
-                                    </div>
+                                <div className="flex items-center justify-between gap-2 pb-1 border-b border-slate-200 dark:border-slate-800">
+                                  <button
+                                    type="button"
+                                    onClick={() => setPayoutSubTab('overview')}
+                                    className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 hover:text-white hover:bg-[#E11D48] transition cursor-pointer flex items-center gap-1.5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs active:scale-95"
+                                  >
+                                    <span>← মূল একাউন্ট স্টেটমেন্টে ফিরে যান</span>
+                                  </button>
+                                  <h3 className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-200">
+                                    ক্যাশআউট হিস্টোরি ({sellerPayouts.length}টি)
+                                  </h3>
+                                </div>
 
-                                    {/* Total count summary */}
-                                    <div className="text-[11px] font-bold text-slate-400 whitespace-nowrap hidden sm:block">
-                                      মোট {filteredPayouts.length}টি রেকর্ড
+                                {/* 4 SEPARATE RESPONSIVE STAT & FILTER CARDS */}
+                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
+                                  {/* Card 1: সবগুলো */}
+                                  <button
+                                    type="button"
+                                    onClick={() => setPayoutStatusFilter('All')}
+                                    className={`p-3 sm:p-3.5 rounded-2xl border transition text-left cursor-pointer space-y-1 shadow-xs active:scale-98 ${
+                                      payoutStatusFilter === 'All'
+                                        ? 'bg-rose-500/10 dark:bg-rose-950/20 border-[#E11D48] ring-1 ring-[#E11D48]'
+                                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300">সবগুলো</span>
+                                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                                        payoutStatusFilter === 'All' ? 'bg-[#E11D48] text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                                      }`}>অল</span>
                                     </div>
+                                    <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">
+                                      {sellerPayouts.length}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 font-bold truncate">সব পেআউট হিস্টোরি</div>
+                                  </button>
+
+                                  {/* Card 2: ⏳ পেন্ডিং */}
+                                  <button
+                                    type="button"
+                                    onClick={() => setPayoutStatusFilter('Pending')}
+                                    className={`p-3 sm:p-3.5 rounded-2xl border transition text-left cursor-pointer space-y-1 shadow-xs active:scale-98 ${
+                                      payoutStatusFilter === 'Pending'
+                                        ? 'bg-rose-500/10 dark:bg-rose-950/20 border-[#E11D48] ring-1 ring-[#E11D48]'
+                                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-bold text-[#E11D48] dark:text-rose-400 flex items-center gap-1">
+                                        ⏳ পেন্ডিং
+                                      </span>
+                                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                                        payoutStatusFilter === 'Pending' ? 'bg-[#E11D48] text-white' : 'bg-rose-500/10 text-[#E11D48]'
+                                      }`}>অপেক্ষমাণ</span>
+                                    </div>
+                                    <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">
+                                      {sellerPayouts.filter(p => p.status === 'Pending').length}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 font-bold truncate">প্রক্রিয়াধীন অনুরোধ</div>
+                                  </button>
+
+                                  {/* Card 3: ✓ পরিশোধিত */}
+                                  <button
+                                    type="button"
+                                    onClick={() => setPayoutStatusFilter('Approved')}
+                                    className={`p-3 sm:p-3.5 rounded-2xl border transition text-left cursor-pointer space-y-1 shadow-xs active:scale-98 ${
+                                      payoutStatusFilter === 'Approved'
+                                        ? 'bg-rose-500/10 dark:bg-rose-950/20 border-[#E11D48] ring-1 ring-[#E11D48]'
+                                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-[#E11D48]/50'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-bold text-[#E11D48] dark:text-rose-400 flex items-center gap-1">
+                                        ✓ পরিশোধিত
+                                      </span>
+                                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                                        payoutStatusFilter === 'Approved' ? 'bg-[#E11D48] text-white' : 'bg-rose-500/10 text-[#E11D48]'
+                                      }`}>সফল</span>
+                                    </div>
+                                    <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">
+                                      {sellerPayouts.filter(p => p.status === 'Approved' || p.status === 'Paid').length}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 font-bold truncate">পরিশোধিত পেআউট</div>
+                                  </button>
+
+                                  {/* Card 4: মোট রেকর্ড */}
+                                  <div className="p-3 sm:p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-1 shadow-xs">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300">মোট রেকর্ড</span>
+                                      <span className="text-[9px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded font-bold">লিস্ট</span>
+                                    </div>
+                                    <div className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">
+                                      {filteredPayouts.length}টি
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 font-bold truncate">মোট রেকর্ড সংখ্যা</div>
                                   </div>
                                 </div>
 
-                                {/* TRANSACTIONS LIST CONTAINER */}
-                                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xs">
-                                  {/* HISTORY ITEMS (RESPONSIVE: MOBILE CARDS + DESKTOP TABLE) */}
-                                  <div>
-                                    {filteredPayouts.length === 0 ? (
+                                {/* TRANSACTIONS LIST CARD (RESPONSIVE: MOBILE CARDS + DESKTOP TABLE) */}
+                                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xs">
+                                  {filteredPayouts.length === 0 ? (
                                       <div className="text-center py-8 space-y-2">
                                         <p className="text-slate-400 text-xs font-bold">প্রদত্ত ফিল্টারে কোনো ক্যাশআউট ইতিহাস পাওয়া যায়নি</p>
                                       </div>
                                     ) : (
                                       <>
-                                        {/* MOBILE / TABLET CARD VIEW (visible on small & medium screens) */}
+                                        {/* MOBILE / TABLET CARD VIEW (visible on small screens) */}
                                         <div className="block md:hidden space-y-3">
                                           {filteredPayouts.map((p) => {
                                             const isPending = p.status === 'Pending';
@@ -10123,7 +10556,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                                   </div>
                                                   <span className={`px-2.5 py-1 rounded-full text-[11px] font-black shrink-0 ${
                                                     isPaid
-                                                      ? 'bg-blue-500/15 text-[#38BDF8] border border-blue-500/30'
+                                                      ? 'bg-rose-500/15 text-[#E11D48] border border-rose-500/30'
                                                       : isPending
                                                       ? 'bg-amber-500/20 text-amber-500 border border-amber-500/40'
                                                       : 'bg-rose-500/15 text-rose-500 border border-rose-500/30'
@@ -10136,7 +10569,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                                 <div className="flex items-start justify-between gap-3">
                                                   <div className="space-y-1 min-w-0">
                                                     <div className="text-xs font-black text-slate-900 dark:text-white flex flex-wrap items-center gap-1.5">
-                                                      <span className="text-[#38BDF8]">{p.paymentMethod}</span>
+                                                      <span className="text-[#E11D48]">{p.paymentMethod}</span>
                                                       <span className="font-mono text-slate-500 text-xs">({p.accountNumber})</span>
                                                     </div>
                                                     <p className="text-xs text-slate-500 dark:text-slate-400 font-medium line-clamp-2">
@@ -10144,7 +10577,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                                     </p>
                                                   </div>
                                                   <div className="text-right shrink-0">
-                                                    <span className="text-base sm:text-lg font-black text-[#38BDF8] font-mono block">
+                                                    <span className="text-base sm:text-lg font-black text-[#E11D48] font-mono block">
                                                       ৳{p.amount.toLocaleString('bn-BD')}
                                                     </span>
                                                   </div>
@@ -10161,7 +10594,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                                         setEditPendingAccount(p.accountNumber);
                                                         setIsEditPendingModalOpen(true);
                                                       }}
-                                                      className="px-3 py-1.5 bg-blue-500/15 hover:bg-blue-500/25 text-blue-500 font-bold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                                                      className="px-3 py-1.5 bg-rose-500/15 hover:bg-rose-500/25 text-[#E11D48] font-bold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer"
                                                     >
                                                       <Pencil className="w-3.5 h-3.5" />
                                                       <span>এডিট</span>
@@ -10184,7 +10617,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                                 ) : (
                                                   <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400">
                                                     <span>{isPaid ? 'পেমেন্ট প্রসেস সম্পন্ন হয়েছে' : 'স্ট্যাটাস চূড়ান্ত'}</span>
-                                                    <span className="flex items-center gap-1 text-blue-500 font-bold">
+                                                    <span className="flex items-center gap-1 text-[#E11D48] font-bold">
                                                       <CheckCircle2 className="w-3.5 h-3.5" />
                                                       লকড
                                                     </span>
@@ -10232,81 +10665,130 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                                     <td className="py-3 text-slate-500 dark:text-slate-400 line-clamp-1 max-w-[200px]">
                                                       {p.note || 'ইনস্ট্যান্ট পেআউট'}
                                                     </td>
-                                                    <td className="py-3 text-right text-[#38BDF8] font-black text-sm whitespace-nowrap">
+                                                    <td className="py-3 text-right text-[#E11D48] font-black text-sm whitespace-nowrap">
                                                       ৳{p.amount.toLocaleString('bn-BD')}
                                                     </td>
                                                     <td className="py-3 text-center whitespace-nowrap">
                                                       <span className={`px-2.5 py-1 rounded-full text-[10px] font-black ${
                                                         isPaid
-                                                          ? 'bg-blue-500/20 text-[#38BDF8]'
+                                                          ? 'bg-rose-500/20 text-[#E11D48]'
                                                           : isPending
-                                                          ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30'
+                                                          ? 'bg-rose-500/15 text-[#E11D48] border border-rose-500/30'
                                                           : 'bg-rose-500/20 text-rose-500'
                                                       }`}>
                                                         {isPaid ? '✓ পরিশোধিত' : isPending ? '⏳ পেন্ডিং' : p.status === 'Rejected' ? '✕ বাতিল' : p.status}
                                                       </span>
                                                     </td>
                                                     <td className="py-3 text-right whitespace-nowrap relative">
-                                                      <div className="relative inline-block text-left">
-                                                        <button
-                                                          onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setOpenPayoutMenuId(openPayoutMenuId === p.id ? null : p.id);
-                                                          }}
-                                                          title="মেনু অপশন (এডিট / বাতিল)"
-                                                          className={`p-1.5 rounded-lg border transition cursor-pointer flex items-center justify-center shadow-sm hover:scale-105 active:scale-95 ${
-                                                            isPending
-                                                              ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30'
-                                                              : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700'
-                                                          }`}
-                                                        >
-                                                          <MoreVertical className="w-4 h-4" />
-                                                        </button>
-
-                                                        {openPayoutMenuId === p.id && (
-                                                          <div
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className={`absolute right-0 z-50 w-44 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-1.5 shadow-2xl backdrop-blur-xl animate-fadeIn space-y-1 text-left font-sans ${
-                                                              openUpward ? 'bottom-full mb-1' : 'top-full mt-1'
+                                                      <div className="flex items-center justify-end gap-1.5">
+                                                        {isPending && (
+                                                          <>
+                                                            <button
+                                                              type="button"
+                                                              onClick={(e) => {
+                                                                e.preventDefault();
+                                                                e.stopPropagation();
+                                                                setOpenPayoutMenuId(null);
+                                                                setEditPendingError('');
+                                                                setEditPendingPayoutId(p.id);
+                                                                setEditPendingAmount(p.amount);
+                                                                setEditPendingMethod((p.paymentMethod || 'bKash') as any);
+                                                                setEditPendingAccount(p.accountNumber || '');
+                                                                setIsEditPendingModalOpen(true);
+                                                             }}
+                                                              title="ক্যাশআউট আবেদন এডিট করুন"
+                                                              className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-bold border border-slate-200 dark:border-slate-700 flex items-center gap-1 transition cursor-pointer hover:border-[#E11D48]/40 hover:text-[#E11D48]"
+                                                            >
+                                                              <Pencil className="w-3.5 h-3.5 text-[#E11D48]" />
+                                                              <span>এডিট</span>
+                                                            </button>
+                                                            <button
+                                                              type="button"
+                                                              onClick={(e) => {
+                                                                e.preventDefault();
+                                                                e.stopPropagation();
+                                                                handleDeletePendingPayout(p.id, p.amount);
+                                                              }}
+                                                              title="ক্যাশআউট আবেদন বাতিল/ডিলিট করুন"
+                                                              className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 text-xs font-bold border border-rose-200 dark:border-rose-900/60 flex items-center gap-1 transition cursor-pointer active:scale-95"
+                                                            >
+                                                              <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                                                              <span>ডিলিট</span>
+                                                            </button>
+                                                          </>
+                                                        )}
+                                                        <div className="relative inline-block text-left">
+                                                          <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                              e.preventDefault();
+                                                              e.stopPropagation();
+                                                              setOpenPayoutMenuId(openPayoutMenuId === p.id ? null : p.id);
+                                                            }}
+                                                            title="মেনু অপশন"
+                                                            className={`p-1.5 sm:p-2 rounded-xl border transition cursor-pointer flex items-center justify-center shadow-xs ${
+                                                              openPayoutMenuId === p.id
+                                                                ? 'bg-[#E11D48] text-white border-[#E11D48]'
+                                                                : 'bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#E11D48]/40'
                                                             }`}
                                                           >
-                                                            {isPending ? (
-                                                              <>
-                                                                <div className="px-2 py-1 border-b border-slate-100 dark:border-slate-800 flex items-center gap-1.5 text-[10px] font-bold text-amber-500">
-                                                                  <Clock className="w-3 h-3 animate-pulse" />
-                                                                  <span>প্রক্রিয়াধীন আবেদন</span>
-                                                                </div>
-                                                                <button
-                                                                  onClick={() => {
-                                                                    setOpenPayoutMenuId(null);
-                                                                    setEditPendingAmount(p.amount);
-                                                                    setEditPendingMethod((p.paymentMethod || 'bKash') as any);
-                                                                    setEditPendingAccount(p.accountNumber);
-                                                                    setIsEditPendingModalOpen(true);
-                                                                  }}
-                                                                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-blue-500/15 hover:text-blue-600 dark:hover:text-blue-400 transition cursor-pointer"
-                                                                >
-                                                                  <Pencil className="w-3.5 h-3.5 text-blue-500" />
-                                                                  <span>এডিট করুন</span>
-                                                                </button>
-                                                                <button
-                                                                  onClick={() => {
-                                                                    setOpenPayoutMenuId(null);
-                                                                    if (confirm(`আপনি কি ৳${p.amount.toLocaleString('bn-BD')} এর ক্যাশআউট আবেদনটি বাতিল করতে চান?`)) {
-                                                                      setAvailableBalance(prev => prev + p.amount);
-                                                                      setActivePendingPayout(null);
-                                                                      alert('আপনার ক্যাশআউট আবেদনটি সফলভাবে বাতিল করা হয়েছে।');
-                                                                    }
-                                                                  }}
-                                                                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/15 transition cursor-pointer"
-                                                                >
-                                                                  <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                                                                  <span>বাতিল করুন</span>
-                                                                </button>
-                                                              </>
-                                                            ) : (
-                                                              <>
-                                                                <div className="px-2 py-1 border-b border-slate-100 dark:border-slate-800 flex items-center gap-1.5 text-[10px] font-bold text-blue-500">
+                                                            <MoreVertical className="w-4 h-4" />
+                                                          </button>
+
+                                                        {openPayoutMenuId === p.id && (
+                                                          <>
+                                                            <div
+                                                              className="fixed inset-0 z-40 bg-transparent"
+                                                              onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setOpenPayoutMenuId(null);
+                                                              }}
+                                                            />
+                                                            <div
+                                                              onClick={(e) => e.stopPropagation()}
+                                                              className={`absolute right-0 z-50 w-44 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-1.5 shadow-2xl backdrop-blur-xl animate-fadeIn space-y-1 text-left font-sans ${
+                                                                openUpward ? 'bottom-full mb-1' : 'top-full mt-1'
+                                                              }`}
+                                                            >
+                                                              {isPending ? (
+                                                                <>
+                                                                  <div className="px-2 py-1 border-b border-slate-100 dark:border-slate-800 flex items-center gap-1.5 text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                                                                    <Clock className="w-3 h-3 text-[#E11D48]" />
+                                                                    <span>প্রক্রিয়াধীন আবেদন</span>
+                                                                  </div>
+                                                                  <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                      e.preventDefault();
+                                                                      e.stopPropagation();
+                                                                      setOpenPayoutMenuId(null);
+                                                                      setEditPendingPayoutId(p.id);
+                                                                      setEditPendingAmount(p.amount);
+                                                                      setEditPendingMethod((p.paymentMethod || 'bKash') as any);
+                                                                      setEditPendingAccount(p.accountNumber || '');
+                                                                      setIsEditPendingModalOpen(true);
+                                                                    }}
+                                                                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-rose-50 dark:hover:bg-rose-500/15 hover:text-[#E11D48] dark:hover:text-rose-400 transition cursor-pointer"
+                                                                  >
+                                                                    <Pencil className="w-3.5 h-3.5 text-[#E11D48]" />
+                                                                    <span>এডিট করুন</span>
+                                                                  </button>
+                                                                  <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                      e.preventDefault();
+                                                                      e.stopPropagation();
+                                                                      handleDeletePendingPayout(p.id, p.amount);
+                                                                    }}
+                                                                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/15 transition cursor-pointer"
+                                                                  >
+                                                                    <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                                                                    <span>বাতিল / ডিলিট করুন</span>
+                                                                  </button>
+                                                                </>
+                                                              ) : (
+                                                                <>
+                                                              <div className="px-2 py-1 border-b border-slate-100 dark:border-slate-800 flex items-center gap-1.5 text-[10px] font-bold text-[#E11D48]">
                                                                   <CheckCircle2 className="w-3 h-3" />
                                                                   <span>{isPaid ? 'পরিশোধিত' : 'স্ট্যাটাস চূড়ান্ত'}</span>
                                                                 </div>
@@ -10324,13 +10806,15 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                                                   <Lock className="w-3.5 h-3.5" />
                                                                   <span>বাতিল (লকড)</span>
                                                                 </div>
-                                                                <p className="px-2 pb-0.5 text-[9px] text-slate-400 font-normal leading-tight">
+                                                               <p className="px-2 pb-0.5 text-[9px] text-slate-400 font-normal leading-tight">
                                                                   টাকা পরিশোধ সম্পন্ন হওয়ায় এটি পরিবর্তনযোগ্য নয়।
                                                                 </p>
                                                               </>
                                                             )}
                                                           </div>
-                                                        )}
+                                                        </>
+                                                      )}
+                                                        </div>
                                                       </div>
                                                     </td>
                                                   </tr>
@@ -10343,7 +10827,6 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                     )}
                                   </div>
                                 </div>
-                              </div>
                             )}
                           </>
                         );
@@ -11632,7 +12115,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                               setAgencyCoursePage(1);
                               window.scrollTo({ top: 0, behavior: 'smooth' });
                             }}
-                            className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
+                            className="text-xs font-bold text-[#006A4E] dark:text-emerald-400 hover:underline flex items-center gap-1 cursor-pointer"
                           >
                             <span>সবগুলো দেখুন</span>
                             <ArrowRight className="w-3.5 h-3.5" />
@@ -11662,7 +12145,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
                                 />
                                 <div className="absolute top-2 left-2 z-10">
-                                  <span className="px-2 py-0.5 rounded-md bg-blue-600 text-white font-bold text-[9px] shadow-xs uppercase tracking-wider">
+                                  <span className="px-2 py-0.5 rounded-md bg-[#006A4E] text-white font-bold text-[9px] shadow-xs uppercase tracking-wider">
                                     {crs.category || 'কোর্স'}
                                   </span>
                                 </div>
@@ -11686,15 +12169,15 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                 {/* Micro Metrics: 3 items (সময়, ক্লাস, এনরোল্ড) */}
                                 <div className="grid grid-cols-3 gap-1 py-1 border-t border-slate-100 dark:border-slate-800/60 text-[9.5px] sm:text-[10px] text-slate-500 dark:text-slate-400 text-center">
                                   <div className="flex flex-col items-center">
-                                    <Clock className="w-3 h-3 text-[#38BDF8] mb-0.5" />
+                                    <Clock className="w-3 h-3 text-[#006A4E] dark:text-emerald-400 mb-0.5" />
                                     <span className="truncate w-full">{crs.duration || '৪ সপ্তাহ'}</span>
                                   </div>
                                   <div className="flex flex-col items-center">
-                                    <BookOpen className="w-3 h-3 text-[#38BDF8] mb-0.5" />
+                                    <BookOpen className="w-3 h-3 text-[#006A4E] dark:text-emerald-400 mb-0.5" />
                                     <span className="truncate w-full">{crs.lessonsCount || 1} ক্লাস</span>
                                   </div>
                                   <div className="flex flex-col items-center">
-                                    <Users className="w-3 h-3 text-[#38BDF8] mb-0.5" />
+                                    <Users className="w-3 h-3 text-[#006A4E] dark:text-emerald-400 mb-0.5" />
                                     <span className="truncate w-full">{crs.enrolledCount || 1}+</span>
                                   </div>
                                 </div>
@@ -11857,7 +12340,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                           </h3>
                           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">মার্কেটপ্লেস ও প্রফেশনাল কাজের জন্য সরাসরি এক্সপার্টদের সাথে শিখুন</p>
                         </div>
-                        <span className="px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-bold text-xs border border-blue-200 dark:border-blue-800">
+                        <span className="px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-[#006A4E] dark:text-emerald-400 font-bold text-xs border border-emerald-200 dark:border-emerald-800">
                           {courses.length}টি কোর্স
                         </span>
                       </div>
@@ -11885,7 +12368,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
                               />
                               <div className="absolute top-2 left-2 z-10">
-                                <span className="px-2 py-0.5 rounded-md bg-blue-600 text-white font-bold text-[9px] shadow-xs uppercase tracking-wider">
+                                <span className="px-2 py-0.5 rounded-md bg-[#006A4E] text-white font-bold text-[9px] shadow-xs uppercase tracking-wider">
                                   {crs.category || 'কোর্স'}
                                 </span>
                               </div>
@@ -11909,15 +12392,15 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                               {/* Micro Metrics: 3 items (সময়, ক্লাস, এনরোল্ড) */}
                               <div className="grid grid-cols-3 gap-1 py-1 border-t border-slate-100 dark:border-slate-800/60 text-[9.5px] sm:text-[10px] text-slate-500 dark:text-slate-400 text-center">
                                 <div className="flex flex-col items-center">
-                                  <Clock className="w-3 h-3 text-[#38BDF8] mb-0.5" />
+                                  <Clock className="w-3 h-3 text-[#006A4E] dark:text-emerald-400 mb-0.5" />
                                   <span className="truncate w-full">{crs.duration || '৪ সপ্তাহ'}</span>
                                 </div>
                                 <div className="flex flex-col items-center">
-                                  <BookOpen className="w-3 h-3 text-[#38BDF8] mb-0.5" />
+                                  <BookOpen className="w-3 h-3 text-[#006A4E] dark:text-emerald-400 mb-0.5" />
                                   <span className="truncate w-full">{crs.lessonsCount || 1} ক্লাস</span>
                                 </div>
                                 <div className="flex flex-col items-center">
-                                  <Users className="w-3 h-3 text-[#38BDF8] mb-0.5" />
+                                  <Users className="w-3 h-3 text-[#006A4E] dark:text-emerald-400 mb-0.5" />
                                   <span className="truncate w-full">{crs.enrolledCount || 1}+</span>
                                 </div>
                               </div>
@@ -12228,46 +12711,44 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
                 {courses.map(crs => (
                   <div
                     key={crs.id}
                     onClick={() => {
                       if (setActiveTab) setActiveTab('courses');
                     }}
-                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 hover:border-blue-600/50 transition shadow-sm hover:shadow-md cursor-pointer flex flex-col justify-between space-y-4 group"
+                    className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 hover:border-[#006A4E]/50 transition shadow-xs hover:shadow-md cursor-pointer flex flex-col justify-between space-y-3 group"
                   >
-                    <div className="space-y-3">
-                      <div className="relative h-40 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-950">
-                        <img src={crs.thumbnail} alt={crs.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                    <div className="space-y-2.5">
+                      <div className="relative h-32 sm:h-36 rounded-lg sm:rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-950">
+                        <img src={crs.thumbnail} alt={crs.title} className="w-full h-full object-cover group-hover:scale-103 transition duration-300" />
                       </div>
                       <div className="flex items-center justify-between text-xs">
-                        <span className="px-2 py-0.5 rounded-md bg-[#006A4E]/10 text-[#38BDF8] dark:bg-[#006A4E]/20 font-bold text-[10px]">
+                        <span className="px-2 py-0.5 rounded-md bg-[#006A4E]/10 text-[#006A4E] dark:bg-[#006A4E]/20 dark:text-emerald-400 font-bold text-[10px]">
                           {crs.level === 'live_batch' ? 'লাইভ ব্যাচ' : 'সার্টিফাইড কোর্স'}
                         </span>
                         <span className="text-[11px] text-slate-500 font-semibold">{crs.category}</span>
                       </div>
-                      <h3 className="text-base font-black text-slate-900 dark:text-white group-hover:text-sky-400 transition line-clamp-1">
+                      <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white group-hover:text-[#006A4E] dark:group-hover:text-emerald-400 transition line-clamp-1 leading-snug">
                         {crs.title}
                       </h3>
-                      <p className="text-xs text-slate-600 dark:text-slate-400">
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400">
                         মেন্টর: {crs.instructor}
                       </p>
-                      <div className="grid grid-cols-2 gap-2 py-1.5 border-y border-slate-100 dark:border-slate-800 text-xs">
-                        <div className="flex flex-col items-center justify-center text-center p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                          <span className="text-base mb-0.5">📚</span>
-                          <span className="font-semibold text-slate-700 dark:text-slate-300 text-[11px]">{crs.lessonsCount} টি ক্লাস</span>
+                      <div className="grid grid-cols-2 gap-1.5 py-1 border-y border-slate-100 dark:border-slate-800 text-xs">
+                        <div className="flex flex-col items-center justify-center text-center p-1 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                          <span className="font-semibold text-slate-700 dark:text-slate-300 text-[10.5px]">📚 {crs.lessonsCount} টি ক্লাস</span>
                         </div>
-                        <div className="flex flex-col items-center justify-center text-center p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                          <span className="text-base mb-0.5">⏱️</span>
-                          <span className="font-semibold text-slate-700 dark:text-slate-300 text-[11px]">{crs.duration}</span>
+                        <div className="flex flex-col items-center justify-center text-center p-1 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                          <span className="font-semibold text-slate-700 dark:text-slate-300 text-[10.5px]">⏱️ {crs.duration}</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                      <span className="text-xs font-bold text-[#006A4E] dark:text-emerald-400">কোর্স ফি:</span>
-                      <span className="text-base font-black text-[#006A4E] dark:text-emerald-400">
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400">কোর্স ফি:</span>
+                      <span className="text-sm sm:text-base font-black text-[#006A4E] dark:text-emerald-400">
                         {crs.isFree ? 'ফ্রি কোর্স' : `৳${(crs.discountPrice || crs.price || 0).toLocaleString('bn-BD')}`}
                       </span>
                     </div>
@@ -12521,11 +13002,11 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                           }}
                           className={`p-2.5 rounded-xl border flex flex-col items-center justify-center text-center transition-all cursor-pointer group active:scale-95 ${
                             orderHubTab === 'courses'
-                              ? 'bg-blue-50/80 dark:bg-blue-950/30 border-blue-500 shadow-2xs'
-                              : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-blue-500/60 hover:shadow-2xs'
+                              ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-[#006A4E] shadow-2xs'
+                              : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-[#006A4E]/60 hover:shadow-2xs'
                           }`}
                         >
-                          <div className="w-8 h-8 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-1 group-hover:scale-110 transition-transform">
+                          <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-[#006A4E] dark:text-emerald-400 flex items-center justify-center mb-1 group-hover:scale-110 transition-transform">
                             <BookOpen className="w-4 h-4" />
                           </div>
                           <h3 className="text-sm sm:text-base font-black font-heading text-slate-900 dark:text-white leading-none">
@@ -12546,14 +13027,14 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                           }}
                           className={`p-2.5 rounded-xl border flex flex-col items-center justify-center text-center transition-all cursor-pointer group active:scale-95 ${
                             orderHubTab === 'orders' && buyerOrderStatusFilter === 'public_projects'
-                              ? 'bg-purple-50/80 dark:bg-purple-950/30 border-purple-500 shadow-2xs'
-                              : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-purple-500/60 hover:shadow-2xs'
+                              ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-[#006A4E] shadow-2xs'
+                              : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-[#006A4E]/60 hover:shadow-2xs'
                           }`}
                         >
-                          <div className="w-8 h-8 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-1 group-hover:scale-110 transition-transform">
+                          <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-[#006A4E] dark:text-emerald-400 flex items-center justify-center mb-1 group-hover:scale-110 transition-transform">
                             <Send className="w-4 h-4" />
                           </div>
-                          <h3 className="text-sm sm:text-base font-black font-heading text-purple-600 dark:text-purple-400 leading-none">
+                          <h3 className="text-sm sm:text-base font-black font-heading text-slate-900 dark:text-white leading-none">
                             <AnimatedOverviewCounter value={`${buyerOpenPosts.length}টি`} />
                           </h3>
                           <p className="text-[10px] sm:text-[11px] font-semibold text-slate-500 dark:text-slate-400 font-bengali mt-1">
@@ -12570,14 +13051,14 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                           }}
                           className={`p-2.5 rounded-xl border flex flex-col items-center justify-center text-center transition-all cursor-pointer group active:scale-95 ${
                             orderHubTab === 'products'
-                              ? 'bg-amber-50/80 dark:bg-amber-950/30 border-amber-500 shadow-2xs'
-                              : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-amber-500/60 hover:shadow-2xs'
+                              ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-[#006A4E] shadow-2xs'
+                              : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-[#006A4E]/60 hover:shadow-2xs'
                           }`}
                         >
-                          <div className="w-8 h-8 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-1 group-hover:scale-110 transition-transform">
+                          <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-[#006A4E] dark:text-emerald-400 flex items-center justify-center mb-1 group-hover:scale-110 transition-transform">
                             <Package className="w-4 h-4" />
                           </div>
-                          <h3 className="text-sm sm:text-base font-black font-heading text-amber-600 dark:text-amber-400 leading-none">
+                          <h3 className="text-sm sm:text-base font-black font-heading text-slate-900 dark:text-white leading-none">
                             <AnimatedOverviewCounter value={`${buyerDigitalOrders.length}টি`} />
                           </h3>
                           <p className="text-[10px] sm:text-[11px] font-semibold text-slate-500 dark:text-slate-400 font-bengali mt-1">
@@ -12593,7 +13074,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                       <div className="flex items-center justify-between gap-2">
                         <div className="space-y-0.5">
                           <h4 className="text-sm sm:text-base font-black text-slate-900 dark:text-white flex items-center gap-1.5">
-                            <Receipt className="w-4 h-4 sm:w-5 sm:h-5 text-[#38BDF8]" />
+                            <Receipt className="w-4 h-4 sm:w-5 sm:h-5 text-[#006A4E]" />
                             <span>পেমেন্ট হিস্টোরি</span>
                           </h4>
                           <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
@@ -12616,7 +13097,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                               }
                             }, 100);
                           }}
-                          className="px-2.5 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/50 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 border border-sky-200/80 dark:border-sky-800 text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shrink-0 hover:shadow-xs active:scale-95 group"
+                          className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/60 text-[#006A4E] dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800 text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shrink-0 hover:shadow-xs active:scale-95 group"
                           title="২য় কলামে সব পেমেন্ট বিস্তারিত দেখুন"
                         >
                           <span>সবগুলো দেখুন</span>
@@ -12635,7 +13116,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                           }}
                           className={`px-3 py-1 rounded-full text-xs font-black transition cursor-pointer shrink-0 ${
                             overviewInnerTab === 'all'
-                              ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-950 shadow-xs'
+                              ? 'bg-[#006A4E] text-white shadow-xs'
                               : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                           }`}
                         >
@@ -12650,8 +13131,8 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                           }}
                           className={`px-3 py-1 rounded-full text-xs font-black transition cursor-pointer shrink-0 ${
                             overviewInnerTab === 'orders'
-                              ? 'bg-[#047857] text-white shadow-xs'
-                              : 'bg-emerald-50 dark:bg-emerald-950/40 text-[#006A4E] dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/80 hover:bg-emerald-100'
+                              ? 'bg-[#006A4E] text-white shadow-xs'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                           }`}
                         >
                           প্রজেক্ট
@@ -12665,8 +13146,8 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                           }}
                           className={`px-3 py-1 rounded-full text-xs font-black transition cursor-pointer shrink-0 ${
                             overviewInnerTab === 'courses'
-                              ? 'bg-blue-600 text-white shadow-xs'
-                              : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/80 hover:bg-blue-100'
+                              ? 'bg-[#006A4E] text-white shadow-xs'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                           }`}
                         >
                           কোর্স
@@ -12680,8 +13161,8 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                           }}
                           className={`px-3 py-1 rounded-full text-xs font-black transition cursor-pointer shrink-0 ${
                             overviewInnerTab === 'products'
-                              ? 'bg-amber-600 text-white shadow-xs'
-                              : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80 hover:bg-amber-100'
+                              ? 'bg-[#006A4E] text-white shadow-xs'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                           }`}
                         >
                           প্রডাক্ট
@@ -12765,22 +13246,13 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                   const isProject = trx.type === 'orders';
                                   const isCourse = trx.type === 'courses';
 
-                                  const iconBgClass = isProject
-                                    ? 'bg-emerald-500/10 text-[#006A4E] dark:text-emerald-400'
-                                    : isCourse
-                                    ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                                    : 'bg-amber-500/10 text-amber-600 dark:text-amber-400';
-
-                                  const typeBadgeClass = isProject
-                                    ? 'bg-emerald-500/15 text-[#006A4E] dark:text-emerald-300'
-                                    : isCourse
-                                    ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300'
-                                    : 'bg-amber-500/15 text-amber-700 dark:text-amber-300';
+                                  const iconBgClass = 'bg-emerald-500/10 text-[#006A4E] dark:text-emerald-400';
+                                  const typeBadgeClass = 'bg-emerald-500/15 text-[#006A4E] dark:text-emerald-300';
 
                                   return (
                                     <div
                                       key={idx}
-                                      className="p-2 sm:p-2.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 border border-slate-200/80 dark:border-slate-800 transition-all flex items-center justify-between gap-2 text-xs"
+                                      className="p-2 sm:p-2.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-emerald-50/10 dark:hover:bg-slate-800/80 border border-slate-200/80 dark:border-slate-800 hover:border-[#006A4E]/60 transition-all flex items-center justify-between gap-2 text-xs"
                                     >
                                       {/* Left: Icon + Type & Title + Details */}
                                       <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -12818,7 +13290,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                         <span className={`text-[9px] font-semibold mt-0.5 ${
                                           trx.isEscrow
                                             ? 'text-amber-600 dark:text-amber-400'
-                                            : 'text-emerald-600 dark:text-emerald-400'
+                                            : 'text-[#006A4E] dark:text-emerald-400'
                                         }`}>
                                           {trx.status}
                                         </span>
@@ -12844,7 +13316,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                       }
                                     }, 100);
                                   }}
-                                  className="w-full mt-1 py-1.5 px-2.5 rounded-lg bg-sky-50/80 hover:bg-sky-100 dark:bg-sky-950/40 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer border border-sky-200/60 dark:border-sky-800/60"
+                                  className="w-full mt-1 py-1.5 px-2.5 rounded-lg bg-emerald-50/80 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-[#006A4E] dark:text-emerald-300 text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer border border-emerald-200/60 dark:border-emerald-800/60"
                                 >
                                   <span>সবগুলো দেখুন (মোট {combined.length}টি)</span>
                                   <ArrowRight className="w-3 h-3" />
@@ -12879,7 +13351,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                   setActiveSubTab('my-orders');
                                   setBuyerOrderStatusFilter('in_progress');
                                 }}
-                                className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex flex-col items-center justify-center text-center hover:border-blue-500/80 hover:shadow-sm transition-all transform hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer group"
+                                className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex flex-col items-center justify-center text-center hover:border-[#006A4E]/80 hover:shadow-sm transition-all transform hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer group"
                               >
                                 <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-emerald-500/10 text-[#006A4E] dark:text-emerald-400 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
                                   <Briefcase className="w-5 h-5" />
@@ -12899,9 +13371,9 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                   setOrderHubTab('courses');
                                   setActiveSubTab('my-orders');
                                 }}
-                                className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex flex-col items-center justify-center text-center hover:border-blue-500/80 hover:shadow-sm transition-all transform hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer group"
+                                className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex flex-col items-center justify-center text-center hover:border-[#006A4E]/80 hover:shadow-sm transition-all transform hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer group"
                               >
-                                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-emerald-500/10 text-[#006A4E] dark:text-emerald-400 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
                                   <BookOpen className="w-5 h-5" />
                                 </div>
                                 <h3 className="text-lg sm:text-2xl font-black font-heading text-slate-900 dark:text-white leading-none">
@@ -12920,12 +13392,12 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                   setActiveSubTab('my-orders');
                                   setBuyerOrderStatusFilter('public_projects');
                                 }}
-                                className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex flex-col items-center justify-center text-center hover:border-purple-500/80 hover:shadow-sm transition-all transform hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer group"
+                                className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex flex-col items-center justify-center text-center hover:border-[#006A4E]/80 hover:shadow-sm transition-all transform hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer group"
                               >
-                                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-emerald-500/10 text-[#006A4E] dark:text-emerald-400 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
                                   <Send className="w-5 h-5" />
                                 </div>
-                                <h3 className="text-lg sm:text-2xl font-black font-heading text-purple-600 dark:text-purple-400 leading-none">
+                                <h3 className="text-lg sm:text-2xl font-black font-heading text-slate-900 dark:text-white leading-none">
                                   <AnimatedOverviewCounter value={`${buyerOpenPosts.length}টি`} />
                                 </h3>
                                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 font-bengali mt-1.5">
@@ -12940,12 +13412,12 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                   setOrderHubTab('products');
                                   setActiveSubTab('my-orders');
                                 }}
-                                className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex flex-col items-center justify-center text-center hover:border-amber-500/80 hover:shadow-sm transition-all transform hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer group"
+                                className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex flex-col items-center justify-center text-center hover:border-[#006A4E]/80 hover:shadow-sm transition-all transform hover:-translate-y-0.5 active:scale-[0.98] cursor-pointer group"
                               >
-                                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-emerald-500/10 text-[#006A4E] dark:text-emerald-400 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
                                   <Package className="w-5 h-5" />
                                 </div>
-                                <h3 className="text-lg sm:text-2xl font-black font-heading text-amber-600 dark:text-amber-400 leading-none">
+                                <h3 className="text-lg sm:text-2xl font-black font-heading text-slate-900 dark:text-white leading-none">
                                   <AnimatedOverviewCounter value={`${buyerDigitalOrders.length}টি`} />
                                 </h3>
                                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 font-bengali mt-1.5">
@@ -12957,15 +13429,15 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                             {/* COMPREHENSIVE PAYMENT & TRANSACTION HISTORY (প্লেইন ডিজাইন: ক্লিন সিমলেস লিস্ট লেআউট) */}
                             <div id="second-column-payment-history" className="pt-2 sm:pt-4 space-y-3 font-bengali scroll-mt-20">
                               {isPaymentHistorySeeAllActive && (
-                                <div className="flex items-center justify-between p-3 rounded-2xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200/80 dark:border-sky-800 text-sky-800 dark:text-sky-200 shadow-xs mb-3">
+                                <div className="flex items-center justify-between p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 shadow-xs mb-3">
                                   <div className="flex items-center gap-2 text-xs sm:text-sm font-black">
-                                    <Receipt className="w-4 h-4 sm:w-5 sm:h-5 text-sky-600 dark:text-sky-400 shrink-0" />
+                                    <Receipt className="w-4 h-4 sm:w-5 sm:h-5 text-[#006A4E] dark:text-emerald-400 shrink-0" />
                                     <span>সকল পেমেন্ট ও লেনদেন বিস্তারিত প্রদর্শিত হচ্ছে</span>
                                   </div>
                                   <button
                                     type="button"
                                     onClick={() => setIsPaymentHistorySeeAllActive(false)}
-                                    className="text-xs font-bold text-sky-700 dark:text-sky-300 hover:text-sky-900 dark:hover:text-white px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-sky-200 dark:border-sky-800 transition cursor-pointer hover:shadow-xs active:scale-95"
+                                    className="text-xs font-bold text-[#006A4E] dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-white px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 transition cursor-pointer hover:shadow-xs active:scale-95"
                                   >
                                     সংক্ষিপ্ত ভিউ
                                   </button>
@@ -12975,7 +13447,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                               <div className="pb-3 border-b border-slate-200/90 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                                 <div className="space-y-0.5">
                                   <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white flex items-center gap-1.5">
-                                    <Receipt className="w-4 h-4 sm:w-5 sm:h-5 text-[#38BDF8]" />
+                                    <Receipt className="w-4 h-4 sm:w-5 sm:h-5 text-[#006A4E]" />
                                     <span>পেমেন্ট হিস্টোরি</span>
                                   </h3>
                                   <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
@@ -12989,7 +13461,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                     onClick={() => setOverviewInnerTab('all')}
                                     className={`px-3 py-1 rounded-full text-xs font-black transition cursor-pointer shrink-0 ${
                                       overviewInnerTab === 'all'
-                                        ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-950 shadow-xs'
+                                        ? 'bg-[#006A4E] text-white shadow-xs'
                                         : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                                     }`}
                                   >
@@ -13001,8 +13473,8 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                     onClick={() => setOverviewInnerTab('orders')}
                                     className={`px-3 py-1 rounded-full text-xs font-black transition cursor-pointer shrink-0 ${
                                       overviewInnerTab === 'orders'
-                                        ? 'bg-[#047857] text-white shadow-xs'
-                                        : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-sky-300 border border-blue-200 dark:border-blue-900/80 hover:bg-blue-100'
+                                        ? 'bg-[#006A4E] text-white shadow-xs'
+                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                                     }`}
                                   >
                                     প্রজেক্ট
@@ -13013,8 +13485,8 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                     onClick={() => setOverviewInnerTab('courses')}
                                     className={`px-3 py-1 rounded-full text-xs font-black transition cursor-pointer shrink-0 ${
                                       overviewInnerTab === 'courses'
-                                        ? 'bg-blue-600 text-white shadow-xs'
-                                        : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/80 hover:bg-blue-100'
+                                        ? 'bg-[#006A4E] text-white shadow-xs'
+                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                                     }`}
                                   >
                                     কোর্স
@@ -13025,8 +13497,8 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                     onClick={() => setOverviewInnerTab('products')}
                                     className={`px-3 py-1 rounded-full text-xs font-black transition cursor-pointer shrink-0 ${
                                       overviewInnerTab === 'products'
-                                        ? 'bg-amber-600 text-white shadow-xs'
-                                        : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80 hover:bg-amber-100'
+                                        ? 'bg-[#006A4E] text-white shadow-xs'
+                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
                                     }`}
                                   >
                                     প্রডাক্ট
@@ -13131,29 +13603,10 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                     const isProject = trx.type === 'orders';
                                     const isCourse = trx.type === 'courses';
 
-                                    const cardThemeClass = isProject
-                                      ? 'bg-white dark:bg-slate-900 border-blue-200/90 dark:border-blue-900/60 hover:border-blue-500/80 hover:bg-blue-50/10 dark:hover:bg-slate-950/20'
-                                      : isCourse
-                                      ? 'bg-white dark:bg-slate-900 border-blue-200/90 dark:border-blue-800/60 hover:border-blue-500/80 hover:bg-blue-50/10 dark:hover:bg-blue-950/20'
-                                      : 'bg-white dark:bg-slate-900 border-amber-200/90 dark:border-amber-800/60 hover:border-amber-500/80 hover:bg-amber-50/10 dark:hover:bg-amber-950/20';
-
-                                    const iconBgClass = isProject
-                                      ? 'bg-blue-500/10 text-[#006A4E] dark:text-sky-400'
-                                      : isCourse
-                                      ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-                                      : 'bg-amber-500/10 text-amber-600 dark:text-amber-400';
-
-                                    const typeBadgeClass = isProject
-                                      ? 'bg-blue-500/15 text-blue-700 dark:text-sky-300 border border-sky-300/60 dark:border-blue-900/60'
-                                      : isCourse
-                                      ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-300/60 dark:border-blue-800/60'
-                                      : 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-300/60 dark:border-amber-800/60';
-
-                                    const serialBadgeClass = isProject
-                                      ? 'bg-blue-500/10 text-blue-700 dark:text-sky-300 font-mono font-black'
-                                      : isCourse
-                                      ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300 font-mono font-black'
-                                      : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 font-mono font-black';
+                                    const cardThemeClass = 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-[#006A4E]/60 hover:bg-emerald-50/10 dark:hover:bg-slate-800/40';
+                                    const iconBgClass = 'bg-emerald-500/10 text-[#006A4E] dark:text-emerald-400';
+                                    const typeBadgeClass = 'bg-emerald-500/15 text-[#006A4E] dark:text-emerald-300 border border-emerald-500/20';
+                                    const serialBadgeClass = 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-mono font-bold';
 
                                     return (
                                       <div
@@ -13205,7 +13658,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                           <span className={`px-2 sm:px-2.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold ${
                                             trx.isEscrow
                                               ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-300/60 dark:border-amber-700/60'
-                                              : 'bg-blue-500/15 text-blue-700 dark:text-sky-300 border border-sky-300/60 dark:border-blue-700/60'
+                                              : 'bg-emerald-500/15 text-[#006A4E] dark:text-emerald-300 border border-emerald-500/30'
                                           }`}>
                                             {trx.status}
                                           </span>
@@ -13228,7 +13681,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                           {/* Header Line: স্টুডেন্ট মেনুবার & নতুন কোর্স ব্রাউজ → */}
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2 font-black text-slate-900 dark:text-white text-xs sm:text-sm">
-                              <div className="w-7 h-7 rounded-xl bg-blue-50 dark:bg-slate-950/80 text-[#38BDF8] flex items-center justify-center border border-blue-200 dark:border-blue-900 shrink-0">
+                              <div className="w-7 h-7 rounded-xl bg-emerald-50 dark:bg-slate-950/80 text-[#006A4E] flex items-center justify-center border border-emerald-200 dark:border-emerald-900 shrink-0">
                                 <GraduationCap className="w-4 h-4" />
                               </div>
                               <span className="font-black text-sm sm:text-base">স্টুডেন্ট মেনুবার</span>
@@ -13244,7 +13697,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                   setActiveSubTab('courses');
                                 }
                               }}
-                              className="text-[#38BDF8] hover:text-sky-400 font-black text-xs sm:text-sm flex items-center gap-1 transition cursor-pointer hover:underline underline-offset-2 shrink-0 ml-auto"
+                              className="text-[#006A4E] hover:text-emerald-700 dark:text-emerald-400 font-black text-xs sm:text-sm flex items-center gap-1 transition cursor-pointer hover:underline underline-offset-2 shrink-0 ml-auto"
                             >
                               <span>নতুন কোর্স ব্রাউজ →</span>
                             </button>
@@ -13258,13 +13711,13 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                               onClick={() => setStudentHubActiveTab('my-courses')}
                               className={`py-2 sm:py-2.5 px-2 sm:px-3 rounded-xl sm:rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 sm:gap-1 min-w-0 ${
                                 studentHubActiveTab === 'my-courses'
-                                  ? 'bg-[#006A4E] border-blue-600/50 text-white shadow-md font-black ring-2 ring-[#006A4E]/40'
+                                  ? 'bg-[#006A4E] border-[#006A4E] text-white shadow-md font-black ring-2 ring-[#006A4E]/40'
                                   : 'bg-slate-50/70 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-700'
                               }`}
                             >
                               <div className="flex items-center justify-center gap-1 sm:gap-1.5 max-w-full">
                                 <BookOpen className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${
-                                  studentHubActiveTab === 'my-courses' ? 'text-white' : 'text-[#38BDF8]'
+                                  studentHubActiveTab === 'my-courses' ? 'text-white' : 'text-[#006A4E]'
                                 }`} />
                                 <span className={`text-xs sm:text-sm font-black leading-tight truncate ${
                                   studentHubActiveTab === 'my-courses' ? 'text-white' : ''
@@ -13283,20 +13736,20 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                               onClick={() => setStudentHubActiveTab('assignments')}
                               className={`py-2 sm:py-2.5 px-2 sm:px-3 rounded-xl sm:rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 sm:gap-1 min-w-0 ${
                                 studentHubActiveTab === 'assignments'
-                                  ? 'bg-purple-600 border-purple-600 text-white shadow-md font-black ring-2 ring-purple-500/40'
+                                  ? 'bg-[#006A4E] border-[#006A4E] text-white shadow-md font-black ring-2 ring-[#006A4E]/40'
                                   : 'bg-slate-50/70 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-700'
                               }`}
                             >
                               <div className="flex items-center justify-center gap-1 sm:gap-1.5 max-w-full">
                                 <FileText className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${
-                                  studentHubActiveTab === 'assignments' ? 'text-white' : 'text-purple-500'
+                                  studentHubActiveTab === 'assignments' ? 'text-white' : 'text-[#006A4E]'
                                 }`} />
                                 <span className={`text-xs sm:text-sm font-black leading-tight truncate ${
                                   studentHubActiveTab === 'assignments' ? 'text-white' : ''
                                 }`}>অ্যাসাইনমেন্ট</span>
                               </div>
                               <span className={`text-xs sm:text-sm font-black leading-tight ${
-                                studentHubActiveTab === 'assignments' ? 'text-white font-black' : 'text-purple-600 dark:text-purple-400 font-black'
+                                studentHubActiveTab === 'assignments' ? 'text-white font-black' : 'text-slate-900 dark:text-white font-black'
                               }`}>
                                 {pendingAssignmentsList.length || 2}টি
                               </span>
@@ -13308,13 +13761,13 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                               onClick={() => setStudentHubActiveTab('live-classes')}
                               className={`py-2 sm:py-2.5 px-2 sm:px-3 rounded-xl sm:rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 sm:gap-1 min-w-0 ${
                                 studentHubActiveTab === 'live-classes'
-                                  ? 'bg-rose-600 border-rose-600 text-white shadow-md font-black ring-2 ring-rose-500/40'
+                                  ? 'bg-[#006A4E] border-[#006A4E] text-white shadow-md font-black ring-2 ring-[#006A4E]/40'
                                   : 'bg-slate-50/70 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-700'
                               }`}
                             >
                               <div className="flex items-center justify-center gap-1 sm:gap-1.5 max-w-full">
                                 <Video className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${
-                                  studentHubActiveTab === 'live-classes' ? 'text-white' : 'text-rose-500'
+                                  studentHubActiveTab === 'live-classes' ? 'text-white' : 'text-[#006A4E]'
                                 }`} />
                                 <span className={`text-xs sm:text-sm font-black leading-tight truncate ${
                                   studentHubActiveTab === 'live-classes' ? 'text-white' : ''
@@ -13324,7 +13777,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                                 studentHubActiveTab === 'live-classes' ? 'text-white' : 'text-slate-900 dark:text-white font-black'
                               }`}>
                                 <span className={`w-1.5 h-1.5 rounded-full ${
-                                  studentHubActiveTab === 'live-classes' ? 'bg-white' : 'bg-rose-500'
+                                  studentHubActiveTab === 'live-classes' ? 'bg-white' : 'bg-emerald-500'
                                 } animate-pulse shrink-0`} />
                                 <span>রাত ৯:০০</span>
                               </span>
@@ -20723,7 +21176,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white w-full max-w-lg rounded-3xl p-5 sm:p-6 shadow-2xl relative space-y-5 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3.5">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-blue-500/15 text-[#38BDF8] flex items-center justify-center border border-blue-600/50/30">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/15 text-[#E11D48] flex items-center justify-center border border-rose-500/30">
                   <Wallet className="w-5 h-5" />
                 </div>
                 <div>
@@ -20745,8 +21198,8 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
             </div>
 
             {withdrawSuccess ? (
-              <div className="p-5 bg-blue-500/10 border border-blue-600/50/40 rounded-2xl text-center space-y-3 animate-fadeIn">
-                <div className="w-12 h-12 rounded-full bg-[#006A4E] text-white flex items-center justify-center mx-auto shadow-lg shadow-blue-500/30">
+              <div className="p-5 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-center space-y-3 animate-fadeIn">
+                <div className="w-12 h-12 rounded-full bg-[#E11D48] text-white flex items-center justify-center mx-auto shadow-lg shadow-rose-500/30">
                   <Check className="w-6 h-6 stroke-[3]" />
                 </div>
                 <div>
@@ -20766,7 +21219,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                     setSellerSubTab('earnings');
                     setPayoutSubTab('history');
                   }}
-                  className="w-full py-2.5 px-4 bg-[#006A4E] hover:bg-[#047857] text-white font-black text-xs rounded-xl transition cursor-pointer"
+                  className="w-full py-2.5 px-4 bg-[#E11D48] hover:bg-[#BE123C] text-white font-black text-xs rounded-xl transition cursor-pointer"
                 >
                   হিস্টোরি ও স্ট্যাটাস দেখুন
                 </button>
@@ -20775,9 +21228,17 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
+                  if (sellerEarningsSummary.availBal <= 0) {
+                    alert('উত্তোলনযোগ্য ব্যালেন্স নেই (৳০)!');
+                    return;
+                  }
                   const numAmt = Number(withdrawAmount);
                   if (!numAmt || numAmt <= 0) {
                     alert('দয়া করে সঠিক উত্তোলনের পরিমাণ দিন!');
+                    return;
+                  }
+                  if (numAmt > sellerEarningsSummary.availBal) {
+                    alert(`আপনার উত্তোলনের পরিমাণ (৳${numAmt.toLocaleString('bn-BD')}) বর্তমান ব্যালেন্সের (৳${sellerEarningsSummary.availBal.toLocaleString('bn-BD')}) চেয়ে বেশি হতে পারবে না!`);
                     return;
                   }
                   if (!withdrawAccount.trim()) {
@@ -20789,6 +21250,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                   const nowTime = new Date().toLocaleString('bn-BD');
 
                   requestTeacherPayout({
+                    id: newId,
                     teacherId: currentUser?.id || '',
                     teacherName: currentUser?.name || 'সেলার',
                     teacherEmail: currentUser?.email || '',
@@ -20814,15 +21276,22 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                 className="space-y-4 text-xs font-bold"
               >
                 {/* Available Balance Box */}
-                <div className="p-3.5 bg-gradient-to-r from-blue-500/15 via-indigo-500/10 to-slate-900/5 dark:to-slate-800/40 border border-blue-600/50/40 rounded-2xl flex items-center justify-between">
+                <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-2xl flex items-center justify-between">
                   <div>
                     <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-normal">উত্তোলনযোগ্য ক্যাশআউট ব্যালেন্স</span>
-                    <span className="text-xl font-black text-[#38BDF8]">৳{(683919).toLocaleString('bn-BD')}</span>
+                    <span className="text-xl font-black text-[#E11D48]">৳{sellerEarningsSummary.availBal.toLocaleString('bn-BD')}</span>
                   </div>
-                  <span className="text-[10px] font-black px-2.5 py-1 bg-[#006A4E]/20 text-[#38BDF8] rounded-full">
+                  <span className="text-[10px] font-black px-2.5 py-1 bg-rose-500/20 text-[#E11D48] rounded-full">
                     ইনস্ট্যান্ট প্রসেস
                   </span>
                 </div>
+
+                {sellerEarningsSummary.availBal <= 0 && (
+                  <div className="p-2 sm:p-2.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs font-bold text-[#E11D48] flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>ব্যালেন্স নেই (৳০)</span>
+                  </div>
+                )}
 
                 {/* Method selector */}
                 <div>
@@ -20842,7 +21311,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                         onClick={() => setWithdrawMethod(m.id as any)}
                         className={`p-2.5 rounded-xl border text-center font-black transition cursor-pointer flex flex-col items-center justify-center gap-1 ${
                           withdrawMethod === m.id
-                            ? 'bg-[#006A4E] text-white border-blue-600/50 shadow-sm'
+                            ? 'bg-[#E11D48] text-white border-[#E11D48] shadow-sm'
                             : `bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700`
                         }`}
                       >
@@ -20863,7 +21332,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                     value={withdrawAccount}
                     onChange={(e) => setWithdrawAccount(e.target.value)}
                     placeholder={withdrawMethod === 'Bank' ? 'যেমন: DBBL 205.120.xxxxx (ধানমন্ডি ব্রাঞ্চ)' : 'যেমন: 01700000000'}
-                    className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono text-xs focus:outline-none focus:border-[#006A4E]"
+                    className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono text-xs focus:outline-none focus:border-[#E11D48]"
                   />
                 </div>
 
@@ -20879,11 +21348,11 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                     type="number"
                     required
                     min={500}
-                    max={683919}
+                    max={sellerEarningsSummary.availBal > 0 ? sellerEarningsSummary.availBal : undefined}
                     value={withdrawAmount}
                     onChange={(e) => setWithdrawAmount(Number(e.target.value))}
                     placeholder="যেমন: 5000"
-                    className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono text-base font-black focus:outline-none focus:border-[#006A4E]"
+                    className="w-full p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono text-base font-black focus:outline-none focus:border-[#E11D48]"
                   />
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {[1000, 2500, 5000, 10000, 25000, 50000].map(amt => (
@@ -20893,7 +21362,7 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                         onClick={() => setWithdrawAmount(amt)}
                         className={`px-2.5 py-1 text-[11px] rounded-lg transition font-mono cursor-pointer border ${
                           withdrawAmount === amt
-                            ? 'bg-[#006A4E] text-white border-blue-600/50'
+                            ? 'bg-[#E11D48] text-white border-[#E11D48]'
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700'
                         }`}
                       >
@@ -20902,8 +21371,8 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                     ))}
                     <button
                       type="button"
-                      onClick={() => setWithdrawAmount(683919)}
-                      className="px-2.5 py-1 bg-blue-500/20 hover:bg-[#006A4E] text-[#38BDF8] hover:text-white text-[11px] font-black rounded-lg transition font-mono cursor-pointer border border-blue-600/50/30"
+                      onClick={() => setWithdrawAmount(sellerEarningsSummary.availBal > 0 ? sellerEarningsSummary.availBal : 0)}
+                      className="px-2.5 py-1 bg-rose-500/15 hover:bg-[#E11D48] text-[#E11D48] hover:text-white text-[11px] font-black rounded-lg transition font-mono cursor-pointer border border-rose-500/30"
                     >
                       {t('সব টাকা', 'All Funds')}
                     </button>
@@ -20920,16 +21389,314 @@ export const MarketplaceSection: React.FC<MarketplaceSectionProps> = ({ setActiv
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-[#006A4E] to-blue-600 hover:from-[#18a649] hover:to-blue-700 text-white transition cursor-pointer flex items-center gap-1.5 shadow-md active:scale-98"
+                    disabled={sellerEarningsSummary.availBal <= 0 || withdrawAmount <= 0 || withdrawAmount > sellerEarningsSummary.availBal}
+                    className={`px-6 py-2.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-md ${
+                      sellerEarningsSummary.availBal <= 0 || withdrawAmount <= 0 || withdrawAmount > sellerEarningsSummary.availBal
+                        ? 'bg-slate-300 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                        : 'bg-[#E11D48] hover:bg-[#BE123C] text-white cursor-pointer active:scale-98'
+                    }`}
+                    title={sellerEarningsSummary.availBal <= 0 ? 'ব্যালেন্স না থাকায় অনুরোধ করা যাবে না' : 'উত্তোলন নিশ্চিত করুন'}
                   >
                     <Send className="w-4 h-4 fill-white" />
-                    <span>উত্তোলন নিশ্চিত করুন</span>
+                    <span>{sellerEarningsSummary.availBal <= 0 ? 'বিল রিকোয়েস্ট (ব্যালেন্স নেই)' : 'উত্তোলন নিশ্চিত করুন'}</span>
                   </button>
                 </div>
               </form>
             )}
           </div>
         </div>
+      )}
+
+      {/* EDIT PENDING CASHOUT APPLICATION MODAL */}
+      {isEditPendingModalOpen && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn font-bengali">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white w-full max-w-lg rounded-3xl p-5 sm:p-6 shadow-2xl relative space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/15 text-[#E11D48] dark:text-rose-400 flex items-center justify-center border border-rose-500/30">
+                  <Pencil className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                    পেন্ডিং ক্যাশআউট আবেদন এডিট
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    টাকার পরিমাণ, মেথড বা একাউন্ট নম্বর সংশোধন করুন
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditPendingModalOpen(false);
+                  setEditPendingError('');
+                }}
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center justify-center transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {editPendingError && (
+              <div className="p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-xs font-bold text-[#E11D48] flex items-center gap-2 animate-shake">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{editPendingError}</span>
+              </div>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const newAmt = Number(editPendingAmount);
+                if (!newAmt || newAmt <= 0) {
+                  setEditPendingError('দয়া করে সঠিক টাকার পরিমাণ প্রদান করুন!');
+                  return;
+                }
+                if (!editPendingAccount.trim()) {
+                  setEditPendingError('দয়া করে সঠিক একাউন্ট নম্বর প্রদান করুন!');
+                  return;
+                }
+
+                // Determine original amount
+                let originalAmt = 0;
+                if (activePendingPayout && activePendingPayout.id === editPendingPayoutId) {
+                  originalAmt = activePendingPayout.amount;
+                } else {
+                  const targetInPayouts = payouts.find(p => p.id === editPendingPayoutId);
+                  if (targetInPayouts) {
+                    originalAmt = targetInPayouts.amount;
+                  }
+                }
+
+                const diff = newAmt - originalAmt;
+                const maxAllowed = Math.max(0, sellerEarningsSummary.availBal + originalAmt);
+                if (diff > 0 && newAmt > maxAllowed) {
+                  setEditPendingError(`অতিরিক্ত ৳${diff.toLocaleString('bn-BD')} আপনার উত্তোলনযোগ্য ব্যালেন্সে নেই! বর্তমানে অবশিষ্ট ব্যালেন্স: ৳${sellerEarningsSummary.availBal.toLocaleString('bn-BD')} (সর্বোচ্চ আবেদন করা যাবে: ৳${maxAllowed.toLocaleString('bn-BD')})`);
+                  return;
+                }
+
+                if (activePendingPayout && activePendingPayout.id === editPendingPayoutId) {
+                  setActivePendingPayout({
+                    ...activePendingPayout,
+                    amount: newAmt,
+                    paymentMethod: editPendingMethod,
+                    accountNumber: editPendingAccount
+                  });
+                }
+
+                updateTeacherPayout(editPendingPayoutId, {
+                  amount: newAmt,
+                  paymentMethod: editPendingMethod,
+                  accountNumber: editPendingAccount
+                });
+
+                setIsEditPendingModalOpen(false);
+                setEditPendingError('');
+                setCashoutSuccessMsg('✓ পেন্ডিং ক্যাশআউট আবেদনটি সফলভাবে আপডেট করা হয়েছে এবং ব্যালেন্স সঠিক হিসাব অনুসারে সমন্বয় করা হয়েছে!');
+                setTimeout(() => {
+                  setCashoutSuccessMsg('');
+                }, 6000);
+              }}
+              className="space-y-4 text-xs font-bold"
+            >
+              {/* Live Balance Summary */}
+              {(() => {
+                let originalAmt = 0;
+                if (activePendingPayout && activePendingPayout.id === editPendingPayoutId) {
+                  originalAmt = activePendingPayout.amount;
+                } else {
+                  const targetInPayouts = payouts.find(p => p.id === editPendingPayoutId);
+                  if (targetInPayouts) originalAmt = targetInPayouts.amount;
+                }
+                const newAmt = Number(editPendingAmount) || 0;
+                const diff = newAmt - originalAmt;
+                const projectedBal = Math.max(0, sellerEarningsSummary.availBal - diff);
+                const maxAllowed = Math.max(0, sellerEarningsSummary.availBal + originalAmt);
+
+                return (
+                  <div className="p-3 bg-rose-500/10 dark:bg-rose-950/20 border border-rose-500/30 rounded-2xl space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-normal">বর্তমানে অবশিষ্ট ব্যালেন্স</span>
+                        <span className="text-base font-black text-[#E11D48] font-mono">৳{sellerEarningsSummary.availBal.toLocaleString('bn-BD')}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-normal">সর্বোচ্চ আবেদন সীমা</span>
+                        <span className="text-base font-black text-slate-900 dark:text-white font-mono">৳{maxAllowed.toLocaleString('bn-BD')}</span>
+                      </div>
+                    </div>
+                    {newAmt > 0 && (
+                      <div className="pt-2 border-t border-rose-500/20 flex items-center justify-between">
+                        <span className="text-[11px] text-slate-600 dark:text-slate-300 font-bold">
+                          {diff < 0
+                            ? `✓ ৳${Math.abs(diff).toLocaleString('bn-BD')} ব্যালেন্সে রিফান্ড হবে`
+                            : diff > 0
+                            ? `৳${diff.toLocaleString('bn-BD')} অতিরিক্ত ব্যালেন্স থেকে কর্তন হবে`
+                            : 'টাকার পরিমাণে কোনো পরিবর্তন নেই'}
+                        </span>
+                        <span className="text-xs font-black text-slate-900 dark:text-white font-mono">
+                          এডিটের পর ব্যালেন্স হবে: <span className="text-[#E11D48]">৳{projectedBal.toLocaleString('bn-BD')}</span>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Payment Method */}
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 mb-1.5">
+                  পেমেন্ট মেথড নির্বাচন করুন *
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { id: 'bKash', label: 'বিকাশ' },
+                    { id: 'Nagad', label: 'নগদ' },
+                    { id: 'Rocket', label: 'রকেট' },
+                    { id: 'Bank', label: 'ব্যাংক' }
+                  ].map(m => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setEditPendingMethod(m.id as any)}
+                      className={`p-2.5 rounded-xl border text-center font-black transition cursor-pointer ${
+                        editPendingMethod === m.id
+                          ? 'bg-[#E11D48] text-white border-[#E11D48] shadow-sm'
+                          : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Account Number */}
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 mb-1.5">
+                  {editPendingMethod === 'Bank' ? 'ব্যাংক একাউন্ট বিবরণ *' : `${editPendingMethod} মোবাইল নম্বর *`}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editPendingAccount}
+                  onChange={(e) => setEditPendingAccount(e.target.value)}
+                  className="w-full p-3 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-slate-900 dark:text-white"
+                  placeholder="01700000000"
+                />
+              </div>
+
+              {/* Amount */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-slate-700 dark:text-slate-300">
+                    উত্তোলনের পরিমাণ (টাকা) *
+                  </label>
+                  {(() => {
+                    let originalAmt = 0;
+                    if (activePendingPayout && activePendingPayout.id === editPendingPayoutId) {
+                      originalAmt = activePendingPayout.amount;
+                    } else {
+                      const targetInPayouts = payouts.find(p => p.id === editPendingPayoutId);
+                      if (targetInPayouts) originalAmt = targetInPayouts.amount;
+                    }
+                    const maxAllowed = Math.max(0, sellerEarningsSummary.availBal + originalAmt);
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => setEditPendingAmount(maxAllowed)}
+                        className="text-[11px] text-[#E11D48] hover:underline font-bold cursor-pointer"
+                      >
+                        সর্বোচ্চ সীমা (৳{maxAllowed.toLocaleString('bn-BD')})
+                      </button>
+                    );
+                  })()}
+                </div>
+                <input
+                  type="number"
+                  required
+                  min="100"
+                  value={editPendingAmount}
+                  onChange={(e) => setEditPendingAmount(Number(e.target.value))}
+                  className="w-full p-3 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-sm font-black text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditPendingModalOpen(false);
+                    setEditPendingError('');
+                  }}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                >
+                  বাতিল
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-xl text-xs font-black bg-[#E11D48] hover:bg-[#BE123C] text-white cursor-pointer transition shadow-md flex items-center gap-1.5 active:scale-95"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>আপডেট সংরক্ষণ করুন</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* DELETE / CANCEL CASHOUT CONFIRMATION MODAL */}
+      {deletePendingTarget && createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn font-bengali">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white w-full max-w-md rounded-3xl p-5 sm:p-6 shadow-2xl relative space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-rose-500/15 text-[#E11D48] flex items-center justify-center border border-rose-500/30">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900 dark:text-white">
+                  ক্যাশআউট আবেদন বাতিল / ডিলিট
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">
+                  #{deletePendingTarget.id}
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-bold">
+              আপনি কি নিশ্চিতভাবে <span className="text-[#E11D48] font-black">৳{deletePendingTarget.amount.toLocaleString('bn-BD')}</span> টাকার এই ক্যাশআউট আবেদনটি বাতিল বা ডিলিট করতে চান? বাতিল করার সাথে সাথেই পুরো টাকা আপনার উত্তোলনযোগ্য ব্যালেন্সে ফেরত যুক্ত হবে।
+            </p>
+            <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setDeletePendingTarget(null)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+              >
+                না, রেখে দিন
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (activePendingPayout && activePendingPayout.id === deletePendingTarget.id) {
+                    setActivePendingPayout(null);
+                  }
+                  deleteTeacherPayout(deletePendingTarget.id);
+                  setCashoutSuccessMsg(`✓ ৳${deletePendingTarget.amount.toLocaleString('bn-BD')} এর ক্যাশআউট আবেদনটি সফলভাবে বাতিল করা হয়েছে এবং পুরো টাকা ব্যালেন্সে ফেরত যোগ হয়েছে।`);
+                  setDeletePendingTarget(null);
+                  setTimeout(() => {
+                    setCashoutSuccessMsg('');
+                  }, 6000);
+                }}
+                className="px-5 py-2.5 rounded-xl text-xs font-black bg-[#E11D48] hover:bg-[#BE123C] text-white transition cursor-pointer shadow-md active:scale-95 flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>হ্যাঁ, নিশ্চিত ডিলিট ও রিফান্ড করুন</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* MENTOR APPLICATION MODAL */}

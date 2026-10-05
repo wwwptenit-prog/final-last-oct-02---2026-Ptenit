@@ -96,16 +96,16 @@ export const DigitalProductFeedCard: React.FC<DigitalProductFeedCardProps> = ({
   return (
     <div
       onClick={() => onSelectProduct(product.rawProduct || product)}
-      className="flex flex-col bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200/90 dark:border-slate-800/90 shadow-sm rounded-2xl sm:rounded-3xl overflow-hidden hover:shadow-xl hover:border-[#006A4E]/50 transition-all duration-300 cursor-pointer font-bengali w-full"
+      className="flex flex-col bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs rounded-xl sm:rounded-2xl overflow-hidden hover:shadow-md hover:border-[#006A4E]/50 transition-all duration-200 cursor-pointer font-bengali w-full"
     >
       {/* 1. Header (Facebook Feed Post Style) */}
-      <div className="p-3 sm:p-4 pb-1.5 sm:pb-2 flex items-center justify-between gap-2.5">
-        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+      <div className="p-2.5 sm:p-3 pb-1 sm:pb-1.5 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
           <div className="relative shrink-0">
             <img
               src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=200&q=80"
               alt="PTENit Digital Studio"
-              className="w-10 h-10 rounded-full object-cover ring-1.5 ring-[#006A4E]/20 border border-slate-200 dark:border-slate-700 shadow-xs"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover ring-1.5 ring-[#006A4E]/20 border border-slate-200 dark:border-slate-700 shadow-xs"
             />
             <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#006A4E] rounded-full ring-2 ring-white dark:ring-slate-900 animate-pulse" />
           </div>
@@ -113,18 +113,18 @@ export const DigitalProductFeedCard: React.FC<DigitalProductFeedCardProps> = ({
           <div className="min-w-0 flex-1">
             {/* Line 1: Name + Verified Green Tick (Facebook Desktop standard font size) */}
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-[14px] sm:text-[15px] font-semibold text-slate-900 dark:text-white truncate">
+              <span className="text-[13.5px] sm:text-[14.5px] font-semibold text-slate-900 dark:text-white truncate">
                 PTENit Digital Studio
               </span>
               <span title="Verified Studio">
                 <CheckCircle2
-                  className="w-4 h-4 text-[#006A4E] fill-[#006A4E] text-white shrink-0"
+                  className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#006A4E] fill-[#006A4E] text-white shrink-0"
                 />
               </span>
             </div>
 
             {/* Line 2: Meta Info (Middle-aligned dots: 1 Mar · Verified · Escrow Shield) */}
-            <div className="flex items-center text-[11px] sm:text-[12px] text-slate-500 dark:text-slate-400 font-normal mt-0.5 whitespace-nowrap overflow-hidden leading-tight">
+            <div className="flex items-center text-[10.5px] sm:text-[11.5px] text-slate-500 dark:text-slate-400 font-normal mt-0.5 whitespace-nowrap overflow-hidden leading-tight">
               <span className="shrink-0">1 Mar</span>
               <span className="text-slate-400 dark:text-slate-500 select-none leading-none inline-flex items-center justify-center px-0.5 font-bold">·</span>
               <span className="text-[#006A4E] dark:text-emerald-400 font-medium shrink-0">Verified</span>
@@ -135,67 +135,67 @@ export const DigitalProductFeedCard: React.FC<DigitalProductFeedCardProps> = ({
         </div>
 
         {/* Right Header Options (Favorite + Share) */}
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               setIsFavorite(!isFavorite);
             }}
-            className={`p-1.5 sm:p-2 rounded-full transition cursor-pointer ${
+            className={`p-1.5 rounded-full transition cursor-pointer ${
               isFavorite
                 ? 'text-rose-500 bg-rose-50 dark:bg-rose-950/40'
                 : 'text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
             title="পছন্দের তালিকায় রাখুন"
           >
-            <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
+            <Heart className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isFavorite ? 'fill-current' : ''}`} />
           </button>
 
           <button
             type="button"
             onClick={handleShare}
-            className="p-1.5 sm:p-2 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
             title={copied ? 'লিঙ্ক কপি হয়েছে' : 'শেয়ার করুন'}
           >
-            <Share2 className="w-4 h-4" />
+            <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
         </div>
       </div>
 
-      {/* 2. Post Caption / Title (Facebook Desktop standard font size: 14px-15px) */}
-      <div className="px-3 sm:px-3.5 pt-0.5 pb-2">
-        <p className="text-[14px] sm:text-[15px] font-normal text-slate-900 dark:text-slate-100 leading-relaxed line-clamp-3">
+      {/* 2. Post Caption / Title */}
+      <div className="px-3 sm:px-3.5 pt-0.5 pb-1.5">
+        <p className="text-[13.5px] sm:text-[14px] font-normal text-slate-900 dark:text-slate-100 leading-snug line-clamp-2">
           {product.title}
         </p>
       </div>
 
       {/* 3. Media Image Frame - ছবির উপর কোন টেক্সট থাকবে না */}
-      <div className="relative w-full select-none bg-slate-950 overflow-hidden group/media">
-        <div className="aspect-video aspect-[16/9] w-full overflow-hidden relative cursor-pointer">
+      <div className="relative w-full select-none bg-slate-900 overflow-hidden group/media">
+        <div className="aspect-video aspect-[16/9] max-h-[300px] w-full overflow-hidden relative cursor-pointer">
           <img
             src={product.thumbnail}
             alt={product.title}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover/media:scale-102"
+            className="w-full h-full object-cover transition-transform duration-300 group-hover/media:scale-102"
           />
         </div>
 
         {/* Strip: এক পাশে ছাড় বা সম্পূর্ন ফ্রি - অপর পাশে প্রাইজ */}
-        <div className="px-3 sm:px-4.5 py-2 sm:py-2.5 bg-slate-50/95 dark:bg-slate-850/95 backdrop-blur-xs border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-          {/* Left: ছাড় বা সম্পূর্ণ ফ্রি (বিস্তারিত বাটনের মতো সবুজ কালার, কোনো বর্ডার ছাড়া) */}
+        <div className="px-3 sm:px-3.5 py-1.5 sm:py-2 bg-slate-50/95 dark:bg-slate-850/95 backdrop-blur-xs border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+          {/* Left: ছাড় বা সম্পূর্ণ ফ্রি */}
           <div className="flex items-center gap-1.5">
             {isFree ? (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#006A4E] text-white text-xs sm:text-sm font-bold shadow-xs">
-                <Gift className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white shrink-0" />
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-[#006A4E] text-white text-xs font-bold shadow-xs">
+                <Gift className="w-3.5 h-3.5 text-white shrink-0" />
                 <span>সম্পূর্ণ ফ্রি</span>
               </span>
             ) : discountPct > 0 ? (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#006A4E] text-white text-xs sm:text-sm font-bold shadow-xs">
-                <Tag className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white shrink-0" />
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-[#006A4E] text-white text-xs font-bold shadow-xs">
+                <Tag className="w-3.5 h-3.5 text-white shrink-0" />
                 <span>{discountPct}% ছাড়</span>
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#006A4E] text-white text-xs sm:text-sm font-bold shadow-xs">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-[#006A4E] text-white text-xs font-bold shadow-xs">
                 <ShoppingBag className="w-3.5 h-3.5 text-white shrink-0" />
                 <span>ডিজিটাল প্রোডাক্ট</span>
               </span>
@@ -203,14 +203,14 @@ export const DigitalProductFeedCard: React.FC<DigitalProductFeedCardProps> = ({
           </div>
 
           {/* Right: প্রাইজ */}
-          <div className="flex items-baseline gap-1.5 text-xs sm:text-sm md:text-base">
+          <div className="flex items-baseline gap-1.5 text-xs sm:text-sm">
             {isFree ? (
-              <span className="font-black text-sm sm:text-base md:text-lg text-[#006A4E] dark:text-emerald-400">
+              <span className="font-black text-sm sm:text-base text-[#006A4E] dark:text-emerald-400">
                 ফ্রি
               </span>
             ) : (
               <>
-                <span className="font-black text-sm sm:text-base md:text-lg text-[#006A4E] dark:text-emerald-400">
+                <span className="font-black text-sm sm:text-base text-[#006A4E] dark:text-emerald-400">
                   ৳{price.toLocaleString('bn-BD')}
                 </span>
                 {originalPrice > price && (
@@ -371,16 +371,16 @@ export const CourseFeedCard: React.FC<CourseFeedCardProps> = ({
   return (
     <div
       onClick={() => onSelectCourse(course.id)}
-      className="flex flex-col bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-slate-200/90 dark:border-slate-800/90 shadow-sm rounded-2xl sm:rounded-3xl overflow-hidden hover:shadow-xl hover:border-[#006A4E]/50 transition-all duration-300 cursor-pointer font-bengali w-full"
+      className="flex flex-col bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-xs rounded-xl sm:rounded-2xl overflow-hidden hover:shadow-md hover:border-[#006A4E]/50 transition-all duration-200 cursor-pointer font-bengali w-full"
     >
       {/* 1. Header (Facebook Feed Post Style) */}
-      <div className="p-3 sm:p-4 pb-1.5 sm:pb-2 flex items-center justify-between gap-2.5">
-        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+      <div className="p-2.5 sm:p-3 pb-1 sm:pb-1.5 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
           <div className="relative shrink-0">
             <img
               src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80"
               alt="PTENit Academy"
-              className="w-10 h-10 rounded-full object-cover ring-1.5 ring-[#006A4E]/20 border border-slate-200 dark:border-slate-700 shadow-xs"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover ring-1.5 ring-[#006A4E]/20 border border-slate-200 dark:border-slate-700 shadow-xs"
             />
             <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-[#006A4E] rounded-full ring-2 ring-white dark:ring-slate-900 animate-pulse" />
           </div>
@@ -388,18 +388,18 @@ export const CourseFeedCard: React.FC<CourseFeedCardProps> = ({
           <div className="min-w-0 flex-1">
             {/* Line 1: Name + Verified Green Tick (Facebook Desktop standard font size) */}
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-[14px] sm:text-[15px] font-semibold text-slate-900 dark:text-white truncate">
+              <span className="text-[13.5px] sm:text-[14.5px] font-semibold text-slate-900 dark:text-white truncate">
                 PTENit Academy
               </span>
               <span title="Verified Academy">
                 <CheckCircle2
-                  className="w-4 h-4 text-[#006A4E] fill-[#006A4E] text-white shrink-0"
+                  className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#006A4E] fill-[#006A4E] text-white shrink-0"
                 />
               </span>
             </div>
 
             {/* Line 2: Meta Info (Middle-aligned dots: 1 Mar · Masterclass · Escrow Shield) */}
-            <div className="flex items-center text-[11px] sm:text-[12px] text-slate-500 dark:text-slate-400 font-normal mt-0.5 whitespace-nowrap overflow-hidden leading-tight">
+            <div className="flex items-center text-[10.5px] sm:text-[11.5px] text-slate-500 dark:text-slate-400 font-normal mt-0.5 whitespace-nowrap overflow-hidden leading-tight">
               <span className="shrink-0">1 Mar</span>
               <span className="text-slate-400 dark:text-slate-500 select-none leading-none inline-flex items-center justify-center px-0.5 font-bold">·</span>
               <span className="text-[#006A4E] dark:text-emerald-400 font-medium shrink-0">Masterclass</span>
@@ -410,67 +410,67 @@ export const CourseFeedCard: React.FC<CourseFeedCardProps> = ({
         </div>
 
         {/* Right Header Options (Favorite + Share) */}
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               setIsFavorite(!isFavorite);
             }}
-            className={`p-1.5 sm:p-2 rounded-full transition cursor-pointer ${
+            className={`p-1.5 rounded-full transition cursor-pointer ${
               isFavorite
                 ? 'text-rose-500 bg-rose-50 dark:bg-rose-950/40'
                 : 'text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
             title="পছন্দের তালিকায় রাখুন"
           >
-            <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
+            <Heart className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isFavorite ? 'fill-current' : ''}`} />
           </button>
 
           <button
             type="button"
             onClick={handleShare}
-            className="p-1.5 sm:p-2 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
             title={copied ? 'লিঙ্ক কপি হয়েছে' : 'শেয়ার করুন'}
           >
-            <Share2 className="w-4 h-4" />
+            <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
         </div>
       </div>
 
-      {/* 2. Post Caption / Title (Facebook Desktop standard font size: 14px-15px) */}
-      <div className="px-3 sm:px-3.5 pt-0.5 pb-2">
-        <p className="text-[14px] sm:text-[15px] font-normal text-slate-900 dark:text-slate-100 leading-relaxed line-clamp-3">
+      {/* 2. Post Caption / Title */}
+      <div className="px-3 sm:px-3.5 pt-0.5 pb-1.5">
+        <p className="text-[13.5px] sm:text-[14px] font-normal text-slate-900 dark:text-slate-100 leading-snug line-clamp-2">
           {course.title}
         </p>
       </div>
 
       {/* 3. Media Image Frame - ছবির উপর কোন টেক্সট থাকবে না */}
-      <div className="relative w-full select-none bg-slate-950 overflow-hidden group/media">
-        <div className="aspect-video aspect-[16/9] w-full overflow-hidden relative cursor-pointer">
+      <div className="relative w-full select-none bg-slate-900 overflow-hidden group/media">
+        <div className="aspect-video aspect-[16/9] max-h-[300px] w-full overflow-hidden relative cursor-pointer">
           <img
             src={course.thumbnail}
             alt={course.title}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover/media:scale-102"
+            className="w-full h-full object-cover transition-transform duration-300 group-hover/media:scale-102"
           />
         </div>
 
         {/* Strip: এক পাশে ছাড় বা সম্পূর্ন ফ্রি - অপর পাশে প্রাইজ */}
-        <div className="px-3 sm:px-4.5 py-2 sm:py-2.5 bg-slate-50/95 dark:bg-slate-850/95 backdrop-blur-xs border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-          {/* Left: ছাড় বা সম্পূর্ণ ফ্রি (বিস্তারিত বাটনের মতো সবুজ কালার, কোনো বর্ডার ছাড়া) */}
+        <div className="px-3 sm:px-3.5 py-1.5 sm:py-2 bg-slate-50/95 dark:bg-slate-850/95 backdrop-blur-xs border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+          {/* Left: ছাড় বা সম্পূর্ণ ফ্রি */}
           <div className="flex items-center gap-1.5">
             {isFree ? (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#006A4E] text-white text-xs sm:text-sm font-bold shadow-xs">
-                <Gift className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white shrink-0" />
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-[#006A4E] text-white text-xs font-bold shadow-xs">
+                <Gift className="w-3.5 h-3.5 text-white shrink-0" />
                 <span>সম্পূর্ণ ফ্রি</span>
               </span>
             ) : discountPct > 0 ? (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#006A4E] text-white text-xs sm:text-sm font-bold shadow-xs">
-                <Tag className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white shrink-0" />
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-[#006A4E] text-white text-xs font-bold shadow-xs">
+                <Tag className="w-3.5 h-3.5 text-white shrink-0" />
                 <span>{discountPct}% ছাড়</span>
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#006A4E] text-white text-xs sm:text-sm font-bold shadow-xs">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-[#006A4E] text-white text-xs font-bold shadow-xs">
                 <GraduationCap className="w-3.5 h-3.5 text-white shrink-0" />
                 <span>একাডেমি কোর্স</span>
               </span>
@@ -478,14 +478,14 @@ export const CourseFeedCard: React.FC<CourseFeedCardProps> = ({
           </div>
 
           {/* Right: প্রাইজ */}
-          <div className="flex items-baseline gap-1.5 text-xs sm:text-sm md:text-base">
+          <div className="flex items-baseline gap-1.5 text-xs sm:text-sm">
             {isFree ? (
-              <span className="font-black text-sm sm:text-base md:text-lg text-[#006A4E] dark:text-emerald-400">
+              <span className="font-black text-sm sm:text-base text-[#006A4E] dark:text-emerald-400">
                 ফ্রি
               </span>
             ) : (
               <>
-                <span className="font-black text-sm sm:text-base md:text-lg text-[#006A4E] dark:text-emerald-400">
+                <span className="font-black text-sm sm:text-base text-[#006A4E] dark:text-emerald-400">
                   ৳{price.toLocaleString('bn-BD')}
                 </span>
                 {originalPrice > price && (

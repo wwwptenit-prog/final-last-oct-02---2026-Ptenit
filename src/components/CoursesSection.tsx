@@ -68,7 +68,7 @@ export const CoursesSection: React.FC<CoursesSectionProps> = ({
   });
 
   return (
-    <section className={`py-8 sm:py-12 bg-white dark:bg-slate-900 ${isStandalonePage ? 'min-h-screen' : ''} font-bengali`}>
+    <section className={`py-6 sm:py-10 bg-slate-50 dark:bg-slate-900 ${isStandalonePage ? 'min-h-screen' : ''} font-bengali`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Title Header - Clean Modern Layout */}
@@ -88,10 +88,10 @@ export const CoursesSection: React.FC<CoursesSectionProps> = ({
               <button
                 type="button"
                 onClick={onBack}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs transition cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs transition cursor-pointer border border-slate-200/80 dark:border-slate-700"
                 title={t('পূর্ববর্তী স্থানে ফিরে যান', 'Go back to previous page')}
               >
-                <ArrowLeft className="w-4 h-4 text-[#38BDF8]" />
+                <ArrowLeft className="w-4 h-4 text-[#006A4E] dark:text-emerald-400" />
                 <span>{t('ফিরে যান', 'Back')}</span>
               </button>
             )}

@@ -174,8 +174,9 @@ interface DataContextType {
   updateUser: (id: string, updates: Partial<User>) => void;
   
   // Teacher Payouts & Notices
-  requestTeacherPayout: (payout: Omit<TeacherPayout, 'id' | 'requestedAt' | 'status'>) => void;
+  requestTeacherPayout: (payout: Omit<TeacherPayout, 'id' | 'requestedAt' | 'status'> & { id?: string }) => void;
   updatePayoutStatus: (payoutId: string, status: TeacherPayout['status'], txId?: string) => void;
+  updateTeacherPayout: (id: string, updates: Partial<TeacherPayout>) => void;
   sendTeacherNotice: (notice: Omit<TeacherNotice, 'id' | 'sentAt'>) => void;
   
   // Assignments (Teachers & Students)
@@ -2977,15 +2978,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const requestTeacherPayout = (payoutData: Omit<TeacherPayout, 'id' | 'requestedAt' | 'status'>) => {
+  const requestTeacherPayout = (payoutData: Omit<TeacherPayout, 'id' | 'requestedAt' | 'status'> & { id?: string }) => {
     const newPayout: TeacherPayout = {
       ...payoutData,
-      id: `pay-${Date.now()}`,
+      id: payoutData.id || `pay-${Date.now().toString().slice(-6)}`,
       status: 'Pending',
       requestedAt: new Date().toLocaleString('bn-BD', { hour12: true })
     };
     setPayouts(prev => {
-      const next = [newPayout, ...prev];
+      const next = [newPayout, ...prev.filter(p => p.id !== newPayout.id)];
       localStorage.setItem(`${STORAGE_KEY}_payouts`, JSON.stringify(next));
       return next;
     });
@@ -3007,6 +3008,40 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         return p;
       });
+      localStorage.setItem(`${STORAGE_KEY}_payouts`, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const updateTeacherPayout = (id: string, updates: Partial<TeacherPayout>) => {
+    setPayouts(prev => {
+      const exists = prev.some(p => p.id === id);
+      let next: TeacherPayout[];
+      if (exists) {
+        next = prev.map(p => {
+          if (p.id === id) {
+            const updated = { ...p, ...updates };
+            syncDocToFirestore('payouts', id, updated);
+            return updated;
+          }
+          return p;
+        });
+      } else {
+        const newPayout: TeacherPayout = {
+          id,
+          teacherId: '',
+          teacherName: 'সেলার',
+          teacherEmail: '',
+          amount: updates.amount || 0,
+          paymentMethod: updates.paymentMethod || 'bKash',
+          accountNumber: updates.accountNumber || '',
+          status: updates.status || 'Pending',
+          requestedAt: new Date().toLocaleString('bn-BD', { hour12: true }),
+          ...updates
+        };
+        next = [newPayout, ...prev];
+        syncDocToFirestore('payouts', id, newPayout);
+      }
       localStorage.setItem(`${STORAGE_KEY}_payouts`, JSON.stringify(next));
       return next;
     });
@@ -4470,6 +4505,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         deleteTeacherNotice,
         requestTeacherPayout,
         updatePayoutStatus,
+        updateTeacherPayout,
         sendTeacherNotice,
         addAssignment,
         deleteAssignment,

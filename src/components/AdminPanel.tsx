@@ -4220,14 +4220,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ setActiveTab }) => {
               {/* 3. একাউন্ট স্টেটমেন্ট (Account Statement) Card */}
               <div className={`p-5 rounded-3xl border transition-all cursor-pointer space-y-3 bg-slate-900 ${
                 officeSellerSubTab === 'financials'
-                  ? 'border-blue-500/80 shadow-lg shadow-blue-500/10 ring-1 ring-[#006A4E]/50'
+                  ? 'border-rose-500/80 shadow-lg shadow-rose-500/10 ring-1 ring-rose-500/50'
                   : 'border-slate-800 hover:border-slate-700'
               }`}>
                 <div className="flex items-center justify-between">
-                  <div className="p-3 bg-blue-500/10 text-sky-400 rounded-2xl border border-blue-500/30">
+                  <div className="p-3 bg-rose-500/10 text-[#E11D48] rounded-2xl border border-rose-500/30">
                     <DollarSign className="w-6 h-6" />
                   </div>
-                  <span className="px-2.5 py-1 bg-blue-500/20 text-sky-400 text-[10px] font-black rounded-full">
+                  <span className="px-2.5 py-1 bg-rose-500/20 text-[#E11D48] text-[10px] font-black rounded-full">
                     ৩. একাউন্ট স্টেটমেন্ট
                   </span>
                 </div>
@@ -4241,11 +4241,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ setActiveTab }) => {
                   <button
                     onClick={() => setOfficeSellerSubTab('financials')}
                     className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      officeSellerSubTab === 'financials' ? 'bg-blue-500 text-white font-black' : 'bg-slate-950 text-slate-300 hover:bg-slate-800'
+                      officeSellerSubTab === 'financials' ? 'bg-[#E11D48] text-white font-black' : 'bg-slate-950 text-slate-300 hover:bg-slate-800'
                     }`}
                   >
                     <span className="flex items-center gap-1.5"><CreditCard className="w-3.5 h-3.5" /> আর্নিং & পেমেন্ট হিস্টোরি</span>
-                    <span className="text-[10px] text-sky-400 font-bold">স্টেটমেন্ট</span>
+                    <span className="text-[10px] text-rose-400 font-bold">স্টেটমেন্ট</span>
                   </button>
                 </div>
               </div>
@@ -4721,11 +4721,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ setActiveTab }) => {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-800 pb-4">
                   <div>
                     <h3 className="text-lg font-black text-white flex items-center gap-2">
-                      <DollarSign className="w-6 h-6 text-sky-400" /> একাউন্ট স্টেটমেন্ট: আর্নিং ও পেমেন্ট হিস্টোরি
+                      <DollarSign className="w-6 h-6 text-[#E11D48]" /> একাউন্ট স্টেটমেন্ট: আর্নিং ও পেমেন্ট হিস্টোরি
                     </h3>
                     <p className="text-xs text-slate-400 mt-0.5">অফিস সেলার ও মেন্টর কমিশন লেজার এবং ক্লায়েন্ট পেমেন্ট সামারি</p>
                   </div>
-                  <span className="px-3.5 py-1.5 bg-blue-500/20 text-sky-400 text-xs font-black rounded-full border border-blue-500/40">
+                  <span className="px-3.5 py-1.5 bg-rose-500/20 text-[#E11D48] text-xs font-black rounded-full border border-rose-500/40">
                     আর্নিং স্টেটমেন্ট ভেরিফাইড
                   </span>
                 </div>
@@ -4741,9 +4741,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ setActiveTab }) => {
                     <span className="text-2xl font-black text-amber-400 mt-1 block">৳৬৯,০০০</span>
                     <span className="text-[10px] text-slate-400 block">(২০% শেয়ারের ওপর)</span>
                   </div>
-                  <div className="bg-slate-950 p-4 rounded-2xl border border-blue-500/30 text-center">
-                    <span className="text-xs text-sky-400 font-bold block">ফ্রিল্যান্সার/স্টাফ পে-আউটস</span>
-                    <span className="text-2xl font-black text-sky-400 mt-1 block">৳২,৭৬,০০০</span>
+                  <div className="bg-slate-950 p-4 rounded-2xl border border-rose-500/30 text-center">
+                    <span className="text-xs text-[#E11D48] font-bold block">ফ্রিল্যান্সার/স্টাফ পে-আউটস</span>
+                    <span className="text-2xl font-black text-[#E11D48] mt-1 block">৳২,৭৬,০০০</span>
                   </div>
                 </div>
 
